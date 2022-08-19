@@ -11,6 +11,6 @@ nodes:
 
 apps:
   example_app:
-    path: "./target/debug/example_app"
+    path: "./app/target/debug/example_app"
 
-file_storage_dir: "./files"
+file_storage_dir: "./app/files"
