@@ -1,0 +1,18 @@
+[package]
+name = "dtrust"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tonic = "0.8.0"
+tokio = { version = "1.20.1", features = ["macros", "rt-multi-thread"] }
+prost = "0.11.0"
+futures = { version = "0.3.*"}
+rand = "0.8.5"
+rand_chacha = "0.3.1"
+async-trait = "0.1.57"
+
+[build-dependencies]
+tonic-build = "0.8.0"
