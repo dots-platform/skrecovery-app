@@ -28,7 +28,8 @@ impl PublicKeyStorage for Client {
         Ok(v) => v,
         Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
     };
-        println!("recover public-key {:?}", key);
+        //println!("recover public-key {:?}", key);
+        println!("{:?}", key);
         key
     }
 }
@@ -72,7 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             
         }  
         "recover_pk" => {
-            println!("Recovering pk");
+            //println!("Recovering pk");
             let id: String = match args[2].parse() {
                 Ok(n) => {
                     n
