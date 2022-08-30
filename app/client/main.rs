@@ -6,25 +6,30 @@ use async_trait::async_trait;
 
 #[async_trait]
 pub trait PublicKeyStorage {
-    async fn upload_pk(&self, key: String, val: i64);
-    async fn recover_pk(&self, key: String) -> i64;
+    async fn upload_pk(&self, id: String, key: String);
+    async fn recover_pk(&self, id: String) -> String;
 }
 
 #[async_trait]
 impl PublicKeyStorage for Client {
-    async fn upload_pk(&self, key: String, val: i64) {
-        let mut upload_val = vec![];
-        for _ in 0..self.node_addrs.len() {
-            upload_val.push(val.to_ne_bytes().to_vec());
-        }
-        self.upload_blob(key, upload_val).await;
+    async fn upload_pk(&self, id: String, key: String) {
+        let upload_val = vec![key.as_bytes().to_vec(); self.node_addrs.len()];
+        self.upload_blob(id, upload_val).await;
     }
 
-    async fn recover_pk(&self, key: String) -> i64 {
-        let vec_val: Vec<Vec<u8>> = self.retrieve_blob(key).await;
-        let val: i64 = i64::from_ne_bytes(vec_val[0][0..8].try_into().unwrap());
-        println!("recover public-key {:?}", val);
-        val
+    async fn recover_pk(&self, id: String) -> String {
+        let vec_val: Vec<Vec<u8>> = self.retrieve_blob(id).await;
+        for i in 0..self.node_addrs.len() {
+            if vec_val[i] != vec_val[0] {
+                panic!("Not valid public-key");
+            }
+        }
+        let key = match String::from_utf8(vec_val[0].clone()) {
+        Ok(v) => v,
+        Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+    };
+        println!("recover public-key {:?}", key);
+        key
     }
 }
 
@@ -34,28 +39,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cmd = &args[1]; 
 
     let node_addrs = ["http://127.0.0.1:50051", "http://127.0.0.1:50052"];
-    let in_files = [String::from("sk")];
 
     let cli_id = "user1";
-    let app_name = "example_app";
-    let func_name = "";
+    //let app_name = "example_app";
+    //let func_name = "";
     let mut client = Client::new(cli_id);
     
     client.setup(node_addrs.to_vec());
     
     match &cmd[..]{
         "upload_pk" => {
-            let pk: i64 = match args[2].parse() {
-                Ok(n) => {
-                    n
+            let id: String = match args[2].parse() {
+                Ok(s) => {
+                    s
                 },
                 Err(_) => {
-                    eprintln!("error: second argument not an integer");
+                    eprintln!("error: user-id not a string");
                     panic!("");
                 },
             };
-            println!("Uploading pk {} for user {}", pk, cli_id);
-            client.upload_pk(String::from(cli_id), pk).await;
+            let pk: String = match args[3].parse() {
+                Ok(s) => {
+                    s
+                },
+                Err(_) => {
+                    eprintln!("error: pk not a string");
+                    panic!("");
+                },
+            };
+            println!("Uploading pk {} for user {}", pk, id);
+            client.upload_pk(String::from(id), pk).await;
             
         }  
         "recover_pk" => {
@@ -69,7 +82,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     panic!("");
                 },
             };
-            //client.exec(app_name, func_name, in_files.to_vec(), [String::from("out")].to_vec()).await?;
             client.recover_pk(id).await;
         }
 
