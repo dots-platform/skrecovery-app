@@ -1,58 +1,97 @@
-use dtrust::client::Client;
+use std::env;
 
-use rand::prelude::*;
-use rand_chacha::ChaCha20Rng;
+use dtrust::client::Client;
 
 use async_trait::async_trait;
 
 #[async_trait]
-pub trait SecretKeyStorage {
-    async fn distribute_sk(&self, key: String, val: i64);
-    async fn recover_sk(&self, key: String) -> i64;
+pub trait PublicKeyStorage {
+    async fn upload_pk(&self, id: String, key: String);
+    async fn recover_pk(&self, id: String) -> String;
 }
 
 #[async_trait]
-impl SecretKeyStorage for Client {
-    async fn distribute_sk(&self, key: String, val: i64) {
-        let mut rng = ChaCha20Rng::from_entropy();
-        let mut shares = vec![];
-        let mut cum_r = 0;
-        for _ in 0..self.node_addrs.len()-1 {
-            let share: i64 = rng.gen();
-            cum_r += share;
-            shares.push(share.to_ne_bytes().to_vec());
-        }
-        shares.push((val - cum_r).to_ne_bytes().to_vec());
-        self.upload_blob(key, shares).await;
+impl PublicKeyStorage for Client {
+    async fn upload_pk(&self, id: String, key: String) {
+        let upload_val = vec![key.as_bytes().to_vec(); self.node_addrs.len()];
+        self.upload_blob(id, upload_val).await;
     }
 
-    async fn recover_sk(&self, key: String) -> i64 {
-        let blobs: Vec<Vec<u8>> = self.retrieve_blob(key).await;
-        let mut val: i64 = 0;
-        for blob in blobs {
-            let v: i64 = i64::from_ne_bytes(blob[0..8].try_into().unwrap());
-            println!("shares retrieved {:?}", v);
-            val += v;
+    async fn recover_pk(&self, id: String) -> String {
+        let vec_val: Vec<Vec<u8>> = self.retrieve_blob(id).await;
+        for i in 0..self.node_addrs.len() {
+            if vec_val[i] != vec_val[0] {
+                panic!("Not valid public-key");
+            }
         }
-        println!("reconstructed val {:?}", val);
-        val
+        let key = match String::from_utf8(vec_val[0].clone()) {
+        Ok(v) => v,
+        Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+    };
+        //println!("recover public-key {:?}", key);
+        println!("{:?}", key);
+        key
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = env::args().collect();
+    let cmd = &args[1]; 
+
     let node_addrs = ["http://127.0.0.1:50051", "http://127.0.0.1:50052"];
-    let in_files = [String::from("sk")];
 
     let cli_id = "user1";
-    let app_name = "example_app";
-    let func_name = "";
+    //let app_name = "example_app";
+    //let func_name = "";
     let mut client = Client::new(cli_id);
     
     client.setup(node_addrs.to_vec());
-    client.distribute_sk(String::from("sk"), 666).await;
-    client.exec(app_name, func_name, in_files.to_vec(), [String::from("out")].to_vec()).await?;
-    client.recover_sk(String::from("sk")).await;
+    
+    match &cmd[..]{
+        "upload_pk" => {
+            let id: String = match args[2].parse() {
+                Ok(s) => {
+                    s
+                },
+                Err(_) => {
+                    eprintln!("error: user-id not a string");
+                    panic!("");
+                },
+            };
+            let pk: String = match args[3].parse() {
+                Ok(s) => {
+                    s
+                },
+                Err(_) => {
+                    eprintln!("error: pk not a string");
+                    panic!("");
+                },
+            };
+            println!("Uploading pk {} for user {}", pk, id);
+            client.upload_pk(String::from(id), pk).await;
+            
+        }  
+        "recover_pk" => {
+            //println!("Recovering pk");
+            let id: String = match args[2].parse() {
+                Ok(n) => {
+                    n
+                },
+                Err(_) => {
+                    eprintln!("error: second argument not a string");
+                    panic!("");
+                },
+            };
+            client.recover_pk(id).await;
+        }
+
+        _=> println!("Missing/wrong arguments")
+
+        // "upload_pk" => 
+
+    };
+
     
     Ok(())
 }
