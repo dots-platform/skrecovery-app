@@ -80,7 +80,7 @@ if rank == 0 {
     socks[1].read(&mut buffer)?;
 }
 ```
-With network connections all setup, you can now develop your own applications! 
+With pairwise network connections all setup, you can now develop your own applications! You can use `core-apps/template` as the starter code for your application. 
 
 
 

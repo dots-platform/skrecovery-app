@@ -28,8 +28,7 @@ impl PublicKeyStorage for Client {
         Ok(v) => v,
         Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
     };
-        //println!("recover public-key {:?}", key);
-        println!("{:?}", key);
+        println!("recovered public-key: {:?}", key);
         key
     }
 }
