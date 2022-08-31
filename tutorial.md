@@ -21,12 +21,15 @@ let mut client = Client::new(cli_id);
 client.setup(node_addrs.to_vec());
 ```
 
-The `upload_blob` function will takes a string as key, and a list of bytes as values. It will upload the i'th bytes in the list to the i'th node, and store it in a file indexed by the key.
+Then, the client can upload data and retrieve data from the servers using the provided functions. The `upload_blob` function takes a string as key, and a list of bytes as values. It will upload the i'th bytes in the list to the i'th server, and store it in a file indexed by the key. The `retrieve_blob` function takes a key string as input, and retrieve the previously uploaded files indexed by the key. Here is an example to upload the strings "hello" and "world" to the servers.  
 
-The `retrieve_blob` function will retrieve the previously uploaded files indexed by the key.
+```rust
+let vals = vec!["hello".as_bytes().to_vec(), "world".as_bytes().to_vec()];
+client.upload_blob(String::from("blob_name"), vals);
+let blob = client.retrieve_blob(String::from("blob_name"));
+```
 
-
-Here is an example client function that uploads a public key to all servers using `upload_blob` and recover them through `retrieve_blob`.
+<!-- Here is an example client function that uploads a public key to all servers using `upload_blob` and recover them through `retrieve_blob`.
 ```rust
 async fn upload_pk(&self, id: String, key: String) {
     let upload_val = vec![key.as_bytes().to_vec(); self.node_addrs.len()];
@@ -47,7 +50,7 @@ async fn recover_pk(&self, id: String) -> String {
     println!("recover public-key {:?}", key);
     key
 }
-```
+``` -->
 
 ### Developing a decentralized app on the servers (Step 2)
 A decentralized app on the server is an executable that the servers jointly executes. The client invokes the executable through gRPC requests, and specify the names of the input files and output files. The dtrust platform first open these files and setups network connections. Then, the dtrust platform forks a subprocess to execute the app, and pass the file and network handles to the subprocess. The app can use the ```init_app``` function provided by the platform to initialize the app:
