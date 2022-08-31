@@ -130,7 +130,7 @@ To add the support for distributed PKI in this application, we direct our focus 
 
 In the first round, rather than the hub client getting the public key of non-hub client through the central server, it uses our distributed PKI to fetch the public key. The workflow is as follows:
 
-The non-hub client creates its public key and calls into `app/client/main.rs` of our framework with `upload_pk` as the argument
+The non-hub client creates its public key and calls into `core-apps/pki/client/main.rs` of our framework with `upload_pk` as the argument
 ```python
 def keyExchange(self_alias):
     serialized_public = clientCreateKeys()
@@ -139,7 +139,7 @@ def keyExchange(self_alias):
     os.system('cd ../../../dtrust/app; cargo run --bin client upload_pk ' + str(self_alias) + ' "' + str(pubkey) + '"')
 ```
 
-Whenever the hub client wants to do DHKE with non-hub client, it can retrieve the latter's public key by calling into `app/client/main.rs` with `recover_pk`
+Whenever the hub client wants to do DHKE with non-hub client, it can retrieve the latter's public key by calling into `core-apps/pki/client/main.rs` with `recover_pk`
 ```python
 def sendFernet(s, data, fernet_key, peer_alias):
     print("Distributed Trust Stack Call: Retrieving pk...")
