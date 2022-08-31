@@ -93,5 +93,34 @@ Our starting point is the [python-chat application by Ludvig Knutsmark](https://
 To fix this issue, we use our distributed trust platform to get rid of the central point-of-attack by using a distributed public-key infrastructure (PKI) which maintains public keys of all clients. We first look into how the distributed PKI is built using our platform, and later look into how the python-chat application uses it to provide stronger end-to-end encryption guarantees.
 
 ### Distributed PKI
+The idea behind our distributed PKI is to have more than one decentralized node maintain a copy of clients' public key (clients who want to chat with each other), and whenever a client wants to talk to another client, they can simply retrieve the copies from all decentralized nodes, compare the copies for equality, and if they all match, the client can be quite certain than they won't suffer a man-in-the-middle attack; this is because the likelihood that all the decentralized nodes are acting malicious / compromised simultaneously is very low.
+
+Here is a code walkthrough:
+
+Clients use this function to upload their public to the distributed PKI by sending a copy to each decentralized node
+```rust
+async fn upload_pk(&self, id: String, key: String) {
+        let upload_val = vec![key.as_bytes().to_vec(); self.node_addrs.len()];
+        self.upload_blob(id, upload_val).await;
+}
+```
+and this function to retrieve the copies from the decentralized nodes and compare them for equality before accepting them for use in the chat application
+```rust
+async fn recover_pk(&self, id: String) -> String {
+        let vec_val: Vec<Vec<u8>> = self.retrieve_blob(id).await;
+        for i in 0..self.node_addrs.len() {
+            if vec_val[i] != vec_val[0] {
+                panic!("Not valid public-key");
+            }
+        }
+        let key = match String::from_utf8(vec_val[0].clone()) {
+        Ok(v) => v,
+        Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+        };
+        println!("Recovered public-key {:?}", key);
+        key
+}
+```
+The `main` function in `app/client/main.rs` takes as argument which function to call, i.e., `upload_pk` or `recover_pk`, and can be called directly from external chat application as we see next.
 
 ### Target Chat Application
