@@ -124,3 +124,33 @@ async fn recover_pk(&self, id: String) -> String {
 The `main` function in `app/client/main.rs` takes as argument which function to call, i.e., `upload_pk` or `recover_pk`, and can be called directly from external chat application as we see next.
 
 ### Target Chat Application
+Applications are all hosted under the [dtrust-applications repo](https://github.com/dtrust-project/dtrust-applications). We focus on the [python-chat application](https://github.com/dtrust-project/dtrust-applications/tree/master/python-chat-dtrust) here.
+
+To add the support for distributed PKI in this application, we direct our focus on its Diffie-Hellman key exchange (DHKE) code in `Client/dh.py`. There are 2 rounds in a DHKE. In the first round, the non-hub client (for definition of hub/non-hub, refer to python-chat documentation) sends its public key to the hub client via the central coordinating server, and in the second round, the hub client completes DHKE and the shared symmetric key is established between the two clients. This interaction is prone to man-in-the-middle attack by a compromised central coordinating server who can plug in its own public key rather than using the client's key. In this tutorial, we safeguard the first round of this interaction using a distributed PKI; we don't safeguard the second round and leave that as an exercise.
+
+In the first round, rather than the hub client getting the public key of non-hub client through the central server, it uses our distributed PKI to fetch the public key. The workflow is as follows:
+
+The non-hub client creates its public key and calls into `app/client/main.rs` of our framework with `upload_pk` as the argument
+```python
+def keyExchange(self_alias):
+    serialized_public = clientCreateKeys()
+    pubkey = serialized_public
+    print("Distributed Trust Stack Call: Uploading pk...")
+    os.system('cd ../../../dtrust/app; cargo run --bin client upload_pk ' + str(self_alias) + ' "' + str(pubkey) + '"')
+```
+
+Whenever the hub client wants to do DHKE with non-hub client, it can retrieve the latter's public key by calling into `app/client/main.rs` with `recover_pk`
+```python
+def sendFernet(s, data, fernet_key, peer_alias):
+    print("Distributed Trust Stack Call: Retrieving pk...")
+    pubkey = subprocess.check_output(['cd ../../../dtrust/app; cargo run --bin client recover_pk ' + str(peer_alias)], shell=True)
+    # Some formatting of the received key
+    pubkey = pubkey.splitlines()[-1][1:-1].split(r'\n')[:-1]
+    pub = pubkey[0] + "\n" + pubkey[1] + "\n" + pubkey[2] + "\n" + pubkey[3] + "\n" + pubkey[4] 
+    pub = pub.encode("utf8")
+    client_public = serialization.load_pem_public_key(
+        pub,
+        backend=default_backend()
+    )
+    ...
+```
