@@ -49,7 +49,7 @@ async fn recover_pk(&self, id: String) -> String {
 }
 ```
 
-### Developing a decentralized App on the servers (Step 2)
+### Developing a decentralized app on the servers (Step 2)
 A decentralized app on the server is an executable that the servers jointly executes. The client invokes the executable through gRPC requests, and specify the names of the input files and output files. The dtrust platform first open these files and setups network connections. Then, the dtrust platform forks a subprocess to execute the app, and pass the file and network handles to the subprocess. The app can use the ```init_app``` function provided by the platform to initialize the app:
 
 ```rust

@@ -43,7 +43,6 @@ impl SecretKeyStorage for Client {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let node_addrs = ["http://127.0.0.1:50051", "http://127.0.0.1:50052"];
     let in_files = [String::from("sk")];
-
     let cli_id = "user1";
     let app_name = "example_app";
     let func_name = "";
