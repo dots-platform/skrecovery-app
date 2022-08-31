@@ -28,6 +28,5 @@ fn main() -> io::Result<()> {
         println!("file content: {}", String::from_utf8_lossy(&buf));
     }
     Ok(())
-
     // develope server side application here ...
 }

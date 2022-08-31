@@ -1,7 +1,7 @@
 # Developing your decentralized application
 
 ## Workflow of a decentralized application
-The dtrust platform consists of a client and multiple decentralized nodes (servers). The client interacts with the nodes through gRPC requests.
+The dtrust platform consists of a client and multiple decentralized nodes (servers). The client interacts with the nodes through gRPC requests. The client can 1) upload and download files from the nodes 2) execute programs on these servers. 
 
 A typical decentralized application consists of the following steps:
 1. A client performs some local pre-computation, and uploads the results of the pre-computations to the servers. The pre-computation results are stored as files on the servers.
@@ -49,7 +49,7 @@ async fn recover_pk(&self, id: String) -> String {
 }
 ```
 
-### Developing a decentralized App on the servers (Step 2)
+### Developing a decentralized app on the servers (Step 2)
 A decentralized app on the server is an executable that the servers jointly executes. The client invokes the executable through gRPC requests, and specify the names of the input files and output files. The dtrust platform first open these files and setups network connections. Then, the dtrust platform forks a subprocess to execute the app, and pass the file and network handles to the subprocess. The app can use the ```init_app``` function provided by the platform to initialize the app:
 
 ```rust

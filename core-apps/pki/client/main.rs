@@ -42,8 +42,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let node_addrs = ["http://127.0.0.1:50051", "http://127.0.0.1:50052"];
 
     let cli_id = "user1";
-    //let app_name = "example_app";
-    //let func_name = "";
     let mut client = Client::new(cli_id);
     
     client.setup(node_addrs.to_vec());
@@ -87,11 +85,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         _=> println!("Missing/wrong arguments")
-
-        // "upload_pk" => 
-
     };
-
-    
     Ok(())
 }
