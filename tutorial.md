@@ -124,7 +124,7 @@ async fn recover_pk(&self, id: String) -> String {
         key
 }
 ```
-The `main` function in `app/client/main.rs` takes as argument which function to call, i.e., `upload_pk` or `recover_pk`, and can be called directly from external chat application as we see next.
+The `main` function in `core-apps/pki/client/main.rs` takes as argument which function to call, i.e., `upload_pk` or `recover_pk`, and can be called directly from external chat application as we see next.
 
 ### Target Chat Application
 Applications are all hosted under the [dtrust-applications repo](https://github.com/dtrust-project/dtrust-applications). We focus on the [python-chat application](https://github.com/dtrust-project/dtrust-applications/tree/master/python-chat-dtrust) here.
@@ -139,14 +139,14 @@ def keyExchange(self_alias):
     serialized_public = clientCreateKeys()
     pubkey = serialized_public
     print("Distributed Trust Stack Call: Uploading pk...")
-    os.system('cd ../../../dtrust/app; cargo run --bin client upload_pk ' + str(self_alias) + ' "' + str(pubkey) + '"')
+    os.system('cd ../../../dtrust/core-apps/pki; cargo run --bin client upload_pk ' + str(self_alias) + ' "' + str(pubkey) + '"')
 ```
 
 Whenever the hub client wants to do DHKE with non-hub client, it can retrieve the latter's public key by calling into `core-apps/pki/client/main.rs` with `recover_pk`
 ```python
 def sendFernet(s, data, fernet_key, peer_alias):
     print("Distributed Trust Stack Call: Retrieving pk...")
-    pubkey = subprocess.check_output(['cd ../../../dtrust/app; cargo run --bin client recover_pk ' + str(peer_alias)], shell=True)
+    pubkey = subprocess.check_output(['cd ../../../dtrust/core-apps/pki; cargo run --bin client recover_pk ' + str(peer_alias)], shell=True)
     # Some formatting of the received key
     pubkey = pubkey.splitlines()[-1][1:-1].split(r'\n')[:-1]
     pub = pubkey[0] + "\n" + pubkey[1] + "\n" + pubkey[2] + "\n" + pubkey[3] + "\n" + pubkey[4] 
