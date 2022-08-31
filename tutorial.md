@@ -82,4 +82,16 @@ With network connections all setup, you can now develop your own applications!
 
 
 ## Example App: Chat
-We will now work through an example application developed on top of the dtrust platform...
+We will now work through an example application developed on top of the dtrust platform.
+
+We use a [python-chat application](https://github.com/dtrust-project/dtrust-applications/tree/master/python-chat-dtrust) as our example here.
+
+In this application, clients use Elliptic-curve Diffie Hellman key exchange to set up symmetric keys which are used to encrypt all conversation that happens between the clients. This provides end-to-end encryption as the central coordinating server doesn't get to see the messages in the conversations in clear. 
+
+Our starting point is the [python-chat application by Ludvig Knutsmark](https://github.com/ludvigknutsmark/python-chat). This application provides end-to-end encryption, but clients have to trust the central coordinating server to convey their public keys to other clients. This server can become a central point-of-attack, and if compromised, can start sending incorrect public keys leading to a man-in-the-middle attack which completely undermines end-to-end encryption.
+
+To fix this issue, we use our distributed trust platform to get rid of the central point-of-attack by using a distributed public-key infrastructure (PKI) which maintains public keys of all clients. We first look into how the distributed PKI is built using our platform, and later look into how the python-chat application uses it to provide stronger end-to-end encryption guarantees.
+
+### Distributed PKI
+
+### Target Chat Application
