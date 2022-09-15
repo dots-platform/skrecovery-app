@@ -1,7 +1,7 @@
 # Developing your decentralized application
 
 ## Workflow of a decentralized application
-The dtrust platform consists of a client and multiple decentralized nodes (servers). The client interacts with the nodes through gRPC requests. The client can 1) upload and download files from the nodes 2) execute programs on these servers. 
+The BDots platform consists of a client and multiple decentralized nodes (servers). The client interacts with the nodes through gRPC requests. The client can 1) upload and download files from the nodes 2) execute programs on these servers. 
 
 A typical decentralized application consists of the following steps:
 1. A client performs some local pre-computation, and uploads the results of the pre-computations to the servers. The pre-computation results are stored as files on the servers.
@@ -11,7 +11,7 @@ A typical decentralized application consists of the following steps:
 The above workflow only provides a general guideline for developing decentralized applications. A decentralized application does not need to follow these steps exactly. Each step is separate and composable from each other, and can be optional depending on the specific application you are building. For example, an app that does secret-key recovery does not have any server side computations, so it can skip step 2.  
 
 ### Developing Client-side Computations (Step 1, Step 3)
-The dtrust platform provides the `upload_blob` and `retrive_blob` functions to upload and retrieve any data as files.
+The BDots platform provides the `upload_blob` and `retrive_blob` functions to upload and retrieve any data as files.
 
 Before uploading or downloading any data, the client first needs to specify which nodes it will connect to:
 ```rust
@@ -53,7 +53,7 @@ async fn recover_pk(&self, id: String) -> String {
 ``` -->
 
 ### Developing a decentralized app on the servers (Step 2)
-A decentralized app on the server is an executable that the servers jointly executes. The client invokes the executable through gRPC requests, and specify the names of the input files and output files. The dtrust platform first open these files and setups network connections. Then, the dtrust platform forks a subprocess to execute the app, and pass the file and network handles to the subprocess. The app can use the ```init_app``` function provided by the platform to initialize the app:
+A decentralized app on the server is an executable that the servers jointly executes. The client invokes the executable through gRPC requests, and specify the names of the input files and output files. The BDots platform first open these files and setups network connections. Then, the BDots platform forks a subprocess to execute the app, and pass the file and network handles to the subprocess. The app can use the ```init_app``` function provided by the platform to initialize the app:
 
 ```rust
 use dtrust::utils::init_app;
@@ -85,7 +85,7 @@ With pairwise network connections all setup, you can now develop your own applic
 
 
 ## Example App: Chat
-We will now work through an example application developed on top of the dtrust platform.
+We will now work through an example application developed on top of the BDots platform.
 
 We use a [python-chat application](https://github.com/dtrust-project/dtrust-applications/tree/master/python-chat-dtrust) as our example here.
 
