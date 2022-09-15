@@ -1,12 +1,16 @@
 # Developing your decentralized application
 
+
 ## Workflow of a decentralized application
-The BDots platform consists of a client and multiple decentralized nodes (servers). The client interacts with the nodes through gRPC requests. The client can 1) upload and download files from the nodes 2) execute programs on these servers. 
+The BDots platform consists of a client and multiple decentralized nodes (servers). The client interacts with the nodes through gRPC requests. BDots provide network connections between these servers, handles file storage, and offers common crypto primitives (under development) for applications built on top of the platform. Below is a diagram that outline the overall architecture of BDots.
+<img src="arch.png"  width="500" title="Employee Data title">
 
 A typical decentralized application consists of the following steps:
 1. A client performs some local pre-computation, and uploads the results of the pre-computations to the servers. The pre-computation results are stored as files on the servers.
 2. The client initiates a request to execute a decentralized app remotely on the servers. The servers take the input files as specified by the client, jointly executes the decentralized app, and stores the results to output files specified by the client. 
 3. The client downloads the results from the servers, and performs some post-computation on the results locally.
+
+<!-- The client can 1) upload and download files from the nodes 2) execute custom applications on these servers.  -->
 
 The above workflow only provides a general guideline for developing decentralized applications. A decentralized application does not need to follow these steps exactly. Each step is separate and composable from each other, and can be optional depending on the specific application you are building. For example, an app that does secret-key recovery does not have any server side computations, so it can skip step 2.  
 
