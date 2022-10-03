@@ -21,10 +21,24 @@ Multiple organizations (e.g banks, hospitals) wants to jointly train a ML model 
 ## Getting Started
 Our platform can run on MacOS and Linux. Windows is currently not supported. 
 
-### 1. Installing Rust
+### 1. Installing Protocol Buffer Compiler
+First, make sure `protoc` is installed on your machine, and its version is 3+. If not, follow [https://grpc.io/docs/protoc-installation/](https://grpc.io/docs/protoc-installation/) to install it.
+
+On linux:
+```bash
+$ apt install -y protobuf-compiler
+$ protoc --version  # Ensure compiler version is 3+
+```
+On MacOS, using Homebrew:
+```bash
+$ brew install protobuf
+$ protoc --version  # Ensure compiler version is 3+
+```
+
+### 2. Installing Rust
 Follow the instruction on [https://www.rust-lang.org/tools/install](https://www.rust-lang.org/tools/install) to install Rust on your machine.
 
-### 2. Initializing decentralized nodes
+### 3. Initializing decentralized nodes
 First, we need to initialize the DTrust platform on multiple servers. We can use the `init_server` command to initialize a private node on a server. The `init_server` command takes a `node_id` and config file (`server_conf.yml`) as input, and initialize the node according to the config. The bash script below will initialize two servers with `node1` and `node2` as their `node_id` respectively.  You need to open two terminals to execute the following commands.
 
 On terminal 1:
@@ -37,7 +51,7 @@ On terminal 2:
 ./platform/init_server --node_id node2 --config ./core-apps/pki/server_conf.yml
 ```
 
-### 3. Running an example application
+### 4. Running an example application
 The `core-apps/pki` folder contains an example application called distributed PKI (public key infrastructure) written in Rust. This app enables a client to store his public key on multiple nodes. Other clients who want to talk to this client can then retrieve the public key from these servers. To run the client, open a another terminal and type in the following commands. 
 
 ```bash
