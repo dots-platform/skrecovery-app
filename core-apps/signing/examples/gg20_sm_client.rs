@@ -1,3 +1,5 @@
+// Credits: ZenGo (https://github.com/ZenGo-X/multi-party-ecdsa)
+
 use std::convert::TryInto;
 
 use anyhow::{Context, Result};

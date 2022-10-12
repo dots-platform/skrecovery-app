@@ -1,3 +1,5 @@
+// Credits: ZenGo (https://github.com/ZenGo-X/multi-party-ecdsa)
+
 use anyhow::{anyhow, Context, Result};
 use futures::StreamExt;
 use std::path::PathBuf;

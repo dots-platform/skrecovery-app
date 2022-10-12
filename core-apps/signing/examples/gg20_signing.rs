@@ -1,3 +1,5 @@
+// Credits: ZenGo (https://github.com/ZenGo-X/multi-party-ecdsa)
+
 use std::path::PathBuf;
 
 use anyhow::{anyhow, Context, Result};

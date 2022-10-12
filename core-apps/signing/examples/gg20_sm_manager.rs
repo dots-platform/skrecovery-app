@@ -1,3 +1,5 @@
+// Credits: ZenGo (https://github.com/ZenGo-X/multi-party-ecdsa)
+
 use std::collections::hash_map::{Entry, HashMap};
 use std::sync::{
     atomic::{AtomicU16, Ordering},
