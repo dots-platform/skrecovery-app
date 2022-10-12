@@ -23,6 +23,22 @@ structopt = "0.3"
 futures = "0.3"
 round-based = { version = "0.1.4", features = ["dev"] }
 
+[[bin]]
+name = "gg20_keygen"
+path = "gg20_keygen.rs"
+
+[[bin]]
+name = "gg20_signing"
+path = "gg20_signing.rs"
+
+[[bin]]
+name = "gg20_sm_client"
+path = "gg20_sm_client.rs"
+
+[[bin]]
+name = "gg20_sm_manager"
+path = "gg20_sm_manager.rs"
+
 [dependencies.multi-party-ecdsa]
 git = "https://github.com/ZenGo-X/multi-party-ecdsa"
 branch = "feature/deprecate-rust-crypto"
