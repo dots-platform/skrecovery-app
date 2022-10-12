@@ -5,7 +5,7 @@
 Distributing trust has become a fundamental principle in building many of today's applications. However, developing and deploying distributed applications remained challenging. Berkeley Dots is a platform for users to easily develop, test, and deploy applications with distributed trust. Here are some example real-world applications with distributed trust that can be built from Berkeley Dots:
 
 ### Cryptocurrency wallet custody
-People claim ownership to crypto assets and authorize transactions using private keys. If these keys are lost, then the user permanently lose access to their assets. To protect these private keys, cryptocurrency custody service (e.g Fireblocks) distribute the keys to multiple servers. Each server holds a secret share of the key, and the servers jointly run secure multi-party computation to authorize transactions with the key.
+People claim ownership to crypto assets and authorize transactions using private keys. If these keys are lost, then the user permanently lose access to their assets. To protect these private keys, cryptocurrency custody service (e.g. Fireblocks) distribute the keys to multiple servers. Each server holds a secret share of the key, and the servers jointly run secure multi-party computation to authorize transactions with the key.
 
 ### Federated blockchain bridges.
 Blockchain bridges enable users to transfer crypto assets or data between two different chains. A federated bridge distributes trust among a committee of stakeholders, who jointly facilitates the transfer of funds. A user that wants to transfer fund to another blockchain would first lock his assets from the source chain into the bridge. The committee then runs an MPC algorithm to jointly produce a minting signature. The user can use this signature to claim a respective token on the destination chain. 
@@ -77,3 +77,6 @@ The above workflow only provides a general guideline for developing decentralize
 
 # Tutorials
 To learn more about the BDots platform as well as this example application, checkout our [tutorial](tutorial.md). The tutorial will equip you with the necessary knowledge to develop your own decentralized applications on BDots.
+
+# Join our Discord channels
+If you are have any questions or want to hear about our latest updates, come join our [discord](https://discord.gg/uVVyTFDpXV) channel.
