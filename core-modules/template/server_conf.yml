@@ -11,6 +11,6 @@ nodes:
 
 apps:
   example_app:
-    path: "./core-apps/template/target/debug/example_app"
+    path: "./core-modules/template/target/debug/example_app"
 
-file_storage_dir: "./core-apps/template/files"
+file_storage_dir: "./core-modules/template/files"

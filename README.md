@@ -1,4 +1,4 @@
-# Berkeley Dots: The Berkeley Decentralized Trust Stack
+# Berkeley DoTS: The Berkeley Decentralized Trust Stack
 
 ***Caveat: This codebase is currently close-sourced. We plan to have it open-sourced at the end of the class. Until then, please do not distribute this repo to anyone outside this class.***
 
@@ -15,7 +15,7 @@ A Distributed Public key infrastructure (PKI) logs clients' public keys on multi
 
 
 ### Collaborative learning/analytics.
-Multiple organizations (e.g banks, hospitals) wants to jointly train a ML model or performing analytics using their sensitive data. They can use MPC to run collaborative learning/analytics without revealing their sensitive data to each other. 
+Multiple organizations (e.g. banks, hospitals) wants to jointly train a ML model or performing analytics using their sensitive data. They can use MPC to run collaborative learning/analytics without revealing their sensitive data to each other. 
 
 
 ## Getting Started
@@ -43,19 +43,19 @@ First, we need to initialize the DTrust platform on multiple servers. We can use
 
 On terminal 1:
 ```bash
-./platform/init_server --node_id node1 --config ./core-apps/pki/server_conf.yml
+./platform/init_server --node_id node1 --config ./core-modules/pki/server_conf.yml
 ```
 
 On terminal 2:
 ```bash
-./platform/init_server --node_id node2 --config ./core-apps/pki/server_conf.yml
+./platform/init_server --node_id node2 --config ./core-modules/pki/server_conf.yml
 ```
 
 ### 4. Running an example application
-The `core-apps/pki` folder contains an example application called distributed PKI (public key infrastructure) written in Rust. This app enables a client to store his public key on multiple nodes. Other clients who want to talk to this client can then retrieve the public key from these servers. To run the client, open a another terminal and type in the following commands. 
+The `core-modules/pki` folder contains an example application called distributed PKI (public key infrastructure) written in Rust. This app enables a client to store his public key on multiple nodes. Other clients who want to talk to this client can then retrieve the public key from these servers. To run the client, open a another terminal and type in the following commands. 
 
 ```bash
-cd core-apps/pki
+cd core-modules/pki
 cargo build
 cargo run --bin client "upload_pk" "user1" "random_public_key"
 cargo run --bin client "recover_pk" "user1"
@@ -76,7 +76,7 @@ A typical decentralized application consists of the following steps:
 The above workflow only provides a general guideline for developing decentralized applications. A decentralized application does not need to follow these steps exactly. Each step is separate and composable from each other, and can be optional depending on the specific application you are building. For example, an app that does secret-key recovery does not have any server side computations, so it can skip step 2.  
 
 # Tutorials
-To learn more about the BDots platform as well as this example application, checkout our [tutorial](tutorial.md). The tutorial will equip you with the necessary knowledge to develop your own decentralized applications on BDots.
+To learn more about the BDoTS platform as well as this example application, checkout our [tutorial](tutorial.md). The tutorial will equip you with the necessary knowledge to develop your own decentralized applications on BDoTS.
 
 # Join our Discord channels
 If you are have any questions or want to hear about our latest updates, come join our [discord](https://discord.gg/uVVyTFDpXV) channel.
