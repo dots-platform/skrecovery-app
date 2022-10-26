@@ -1,10 +1,10 @@
-// Credits: ZenGo (https://github.com/ZenGo-X/multi-party-ecdsa)
 
-use std::path::PathBuf;
+use signing::gg20_signing::*;
+use structopt::StructOpt;
 
 use anyhow::{anyhow, Context, Result};
 use futures::{SinkExt, StreamExt, TryStreamExt};
-use structopt::StructOpt;
+use signing::gg20_sm_client::join_computation;
 
 use curv::arithmetic::Converter;
 use curv::BigInt;
@@ -14,24 +14,6 @@ use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::sig
 };
 use round_based::async_runtime::AsyncProtocol;
 use round_based::Msg;
-
-mod gg20_sm_client;
-use gg20_sm_client::join_computation;
-
-#[derive(Debug, StructOpt)]
-struct Cli {
-    #[structopt(short, long, default_value = "http://localhost:8000/")]
-    address: surf::Url,
-    #[structopt(short, long, default_value = "default-signing")]
-    room: String,
-    #[structopt(short, long)]
-    local_share: PathBuf,
-
-    #[structopt(short, long, use_delimiter(true))]
-    parties: Vec<u16>,
-    #[structopt(short, long)]
-    data_to_sign: String,
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {

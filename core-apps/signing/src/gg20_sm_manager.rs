@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{Notify, RwLock};
 
 #[rocket::get("/rooms/<room_id>/subscribe")]
-async fn subscribe(
+pub async fn subscribe(
     db: &State<Db>,
     mut shutdown: rocket::Shutdown,
     last_seen_msg: LastEventId,
@@ -39,24 +39,24 @@ async fn subscribe(
 }
 
 #[rocket::post("/rooms/<room_id>/issue_unique_idx")]
-async fn issue_idx(db: &State<Db>, room_id: &str) -> Json<IssuedUniqueIdx> {
+pub async fn issue_idx(db: &State<Db>, room_id: &str) -> Json<IssuedUniqueIdx> {
     let room = db.get_room_or_create_empty(room_id).await;
     let idx = room.issue_unique_idx();
     Json::from(IssuedUniqueIdx { unique_idx: idx })
 }
 
 #[rocket::post("/rooms/<room_id>/broadcast", data = "<message>")]
-async fn broadcast(db: &State<Db>, room_id: &str, message: String) -> Status {
+pub async fn broadcast(db: &State<Db>, room_id: &str, message: String) -> Status {
     let room = db.get_room_or_create_empty(room_id).await;
     room.publish(message).await;
     Status::Ok
 }
 
-struct Db {
+pub struct Db {
     rooms: RwLock<HashMap<String, Arc<Room>>>,
 }
 
-struct Room {
+pub struct Room {
     messages: RwLock<Vec<String>>,
     message_appeared: Notify,
     subscribers: AtomicU16,
@@ -126,7 +126,7 @@ impl Room {
     }
 }
 
-struct Subscription {
+pub struct Subscription {
     room: Arc<Room>,
     next_event: u16,
 }
@@ -154,7 +154,7 @@ impl Drop for Subscription {
 }
 
 /// Represents a header Last-Event-ID
-struct LastEventId(Option<u16>);
+pub struct LastEventId(Option<u16>);
 
 #[rocket::async_trait]
 impl<'r> FromRequest<'r> for LastEventId {
@@ -176,12 +176,11 @@ impl<'r> FromRequest<'r> for LastEventId {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct IssuedUniqueIdx {
+pub struct IssuedUniqueIdx {
     unique_idx: u16,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run_manager() -> Result<(), Box<dyn std::error::Error>> {
     let figment = rocket::Config::figment().merge((
         "limits",
         rocket::data::Limits::new().limit("string", 100.megabytes()),

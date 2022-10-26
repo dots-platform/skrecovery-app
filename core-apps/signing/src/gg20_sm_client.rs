@@ -30,7 +30,7 @@ where
         .and_then(|msg| async move {
             serde_json::from_str::<Msg<M>>(&msg).context("deserialize message")
         });
-
+    
     // Obtain party index
     let index = client.issue_index().await.context("issue an index")?;
 
@@ -104,7 +104,9 @@ impl SmClient {
                     // ignore other types of events
                     None
                 }
-                Err(e) => Some(Err(e.into_inner())),
+                Err(e) => {
+                    Some(Err(e.into_inner()))
+                },
             }
         }))
     }
@@ -116,46 +118,21 @@ struct IssuedUniqueIdx {
 }
 
 #[derive(StructOpt, Debug)]
-struct Cli {
+pub struct Cli {
     #[structopt(short, long)]
-    address: surf::Url,
+    pub address: surf::Url,
     #[structopt(short, long)]
-    room: String,
+    pub room: String,
     #[structopt(subcommand)]
-    cmd: Cmd,
+    pub cmd: Cmd,
 }
 
 #[derive(StructOpt, Debug)]
-enum Cmd {
+pub enum Cmd {
     Subscribe,
     Broadcast {
         #[structopt(short, long)]
         message: String,
     },
     IssueIdx,
-}
-
-#[tokio::main]
-#[allow(dead_code)]
-async fn main() -> Result<()> {
-    let args: Cli = Cli::from_args();
-    let client = SmClient::new(args.address, &args.room).context("create SmClient")?;
-    match args.cmd {
-        Cmd::Broadcast { message } => client
-            .broadcast(&message)
-            .await
-            .context("broadcast message")?,
-        Cmd::IssueIdx => {
-            let index = client.issue_index().await.context("issue index")?;
-            println!("Index: {}", index);
-        }
-        Cmd::Subscribe => {
-            let messages = client.subscribe().await.context("subsribe")?;
-            tokio::pin!(messages);
-            while let Some(message) = messages.next().await {
-                println!("{:?}", message);
-            }
-        }
-    }
-    Ok(())
 }

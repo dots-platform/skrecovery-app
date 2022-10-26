@@ -15,7 +15,7 @@ aes-gcm = "0.9.4"
 curv-kzen = { version = "0.9" }
 libsecp256k1 = "0.3.2"
 clap = { version = "2.33", features = ["yaml"] }
-tokio = { version = "1", default-features = false, features = ["macros"] }
+tokio = { version = "1", default-features = false, features = ["macros", "process"] }
 surf = "2"
 anyhow = "1"
 async-sse = "5"
@@ -25,19 +25,22 @@ round-based = { version = "0.1.4", features = ["dev"] }
 
 [[bin]]
 name = "gg20_keygen"
-path = "gg20_keygen.rs"
 
 [[bin]]
 name = "gg20_signing"
-path = "gg20_signing.rs"
 
 [[bin]]
 name = "gg20_sm_client"
-path = "gg20_sm_client.rs"
 
 [[bin]]
 name = "gg20_sm_manager"
-path = "gg20_sm_manager.rs"
+
+[[bin]]
+name = "keygen_test"
+
+[lib]
+name = "signing"
+path = "src/lib.rs"
 
 [dependencies.multi-party-ecdsa]
 git = "https://github.com/ZenGo-X/multi-party-ecdsa"
