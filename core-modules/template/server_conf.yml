@@ -1,16 +1,20 @@
 ---
 nodes:
   node1:
-    addr: "127.0.0.1"
-    port: 50051      # port for connection between client and server
-    tcp_port: 50053  # port for setting up tcp connections between nodes
+    addr: "127.0.0.1:50051"
+    ports: [51000]      # ports for connection between client and server
   node2:
-    addr: "127.0.0.1"
-    port: 50052      
-    tcp_port: 50054
+    addr: "127.0.0.1:50052"
+    ports: [52000]      
+  node3:
+    addr: "127.0.0.1:50053"
+    ports: [53000]
 
 apps:
-  example_app:
-    path: "./core-modules/template/target/debug/example_app"
+  rust_app:
+    path: "./core-modules/template/target/debug/rust_app"
+
+  cpp_app:
+    path: "./core-modules/template/a.out"
 
 file_storage_dir: "./core-modules/template/files"

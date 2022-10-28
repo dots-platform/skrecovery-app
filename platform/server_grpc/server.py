@@ -15,7 +15,8 @@ class DecExecServicer(dec_exec_pb2_grpc.DecExecServicer):
         if not os.path.exists(self.storage_dir):
             os.makedirs(self.storage_dir)
 
-        self.node_ids = self.node_directory.get_all_nodes()
+        self.node_ids = sorted(self.node_directory.get_all_nodes())
+        self.rank = self.node_ids.index(self.node_id)
 
     def UploadBlob(self, request, context):
         key = request.key
@@ -52,7 +53,7 @@ class DecExecServicer(dec_exec_pb2_grpc.DecExecServicer):
         cli_id = request.client_id
         node_ids = self.node_ids
 
-        rank = node_ids.index(self.node_id)
+        rank = self.rank
         exe_path = self.app_directory.get_exe_path(app_name)
         
         # open input files
@@ -75,7 +76,8 @@ class DecExecServicer(dec_exec_pb2_grpc.DecExecServicer):
         out_fds_str = " ".join(list(map(str, out_fds))) + "\n"
 
         # setting up tcp connections
-        sock_fds = self._setup_pairwise_connections(node_ids)
+        sock_fds = self._setup_pairwise_connections()
+        print("Finish setting up socket connections")
         sock_fds_str = " ".join(list(map(str, sock_fds))) + "\n"
 
         # execute user-defined functions/apps
@@ -98,18 +100,20 @@ class DecExecServicer(dec_exec_pb2_grpc.DecExecServicer):
         result = dec_exec_pb2.Result(result="success")
 
         return result 
-        
-    def _setup_pairwise_connections(self, node_ids):
+
+    def _setup_pairwise_connections(self):
+        ports = []
         sock_fds = []
 
-        print("Setting up socket connections")
-        for node in node_ids:
-            host, port = self.node_directory.get_node_addr(node)
+        host = self.node_directory.get_node_addr(self.node_id)
+        ports = self.node_directory.get_node_ports(self.node_id)
 
-            if node == self.node_id:
+        for i, node in enumerate(self.node_ids):
+            if i < self.rank:
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                s.bind((host, port))
+                print(f"Listening on {host}:{ports[i]}:")
+                s.bind((host, ports[i]))
                 s.listen()
                 
                 clients = []
@@ -117,19 +121,34 @@ class DecExecServicer(dec_exec_pb2_grpc.DecExecServicer):
                     conn, addr = s.accept()
                     clients.append(conn)
                     data = conn.recv(1024).decode()
+                    # print(data)
                     sock_fds.append(os.dup(conn.fileno()))
                     conn.close()
                 except Exception as e:
                     print('server socket connection error: ' + str(e))
                     s.close()
-            else:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                s.connect((host, port))        
+            elif i > self.rank:
+                host = self.node_directory.get_node_addr(node)
+                port = self.node_directory.get_node_ports(node)[self.rank]
+
+                print(f"Connecting to {host}:{port}")
+                connected = False
+                while not connected:
+                    try:
+                        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                        s.connect((host,port))
+                        connected = True
+                    except Exception as e:
+                        pass #Do nothing, just try again  
+
                 data = b"hello"
                 s.send(data)
                 sock_fds.append(os.dup(s.fileno()))
                 s.close()
-        
-        print("Finish setting up socket connections")
+            else:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock_fds.append(s.fileno())
+
         return sock_fds
