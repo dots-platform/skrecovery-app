@@ -50,9 +50,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut client = Client::new(cli_id);
     
     client.setup(node_addrs.to_vec());
-    // client.distribute_sk(String::from("sk"), 666).await;
+    client.distribute_sk(String::from("sk"), 666).await;
     client.exec(app_name, func_name, in_files.to_vec(), [String::from("out")].to_vec()).await?;
-    // client.recover_sk(String::from("sk")).await;
+    client.recover_sk(String::from("sk")).await;
     
     Ok(())
 }
