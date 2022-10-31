@@ -19,14 +19,14 @@ def serve():
     node_id = args.node_id
     if node_id not in config["nodes"]:
         raise Exception(f"node {node_id} not found in config")
-    port = config["nodes"][node_id]["port"]
+    addr = config["nodes"][node_id]["addr"]
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     dec_exec_pb2_grpc.add_DecExecServicer_to_server(
     DecExecServicer(node_id, config), server
     )
-    server.add_insecure_port(f'127.0.0.1:{port}')
-    print(f"Starting server {node_id} on 127.0.0.1:{port}")
+    server.add_insecure_port(f'{addr}')
+    print(f"Starting server {node_id} on {addr}")
     server.start()
     server.wait_for_termination()
 

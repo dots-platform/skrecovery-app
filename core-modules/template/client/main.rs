@@ -41,18 +41,18 @@ impl SecretKeyStorage for Client {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let node_addrs = ["http://127.0.0.1:50051", "http://127.0.0.1:50052"];
+    let node_addrs = ["http://127.0.0.1:50051", "http://127.0.0.1:50052", "http://127.0.0.1:50053"];
     let in_files = [String::from("sk")];
 
     let cli_id = "user1";
-    let app_name = "example_app";
+    let app_name = "rust_app";
     let func_name = "";
     let mut client = Client::new(cli_id);
     
     client.setup(node_addrs.to_vec());
-    client.distribute_sk(String::from("sk"), 666).await;
+    // client.distribute_sk(String::from("sk"), 666).await;
     client.exec(app_name, func_name, in_files.to_vec(), [String::from("out")].to_vec()).await?;
-    client.recover_sk(String::from("sk")).await;
+    // client.recover_sk(String::from("sk")).await;
     
     Ok(())
 }

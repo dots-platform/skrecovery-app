@@ -17,5 +17,5 @@ name = "client"
 path = "client/main.rs"
 
 [[bin]]
-name = "example_app"
-path = "server/main.rs"
+name = "rust_app"
+path = "server/app.rs"

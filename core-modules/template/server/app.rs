@@ -10,15 +10,20 @@ fn main() -> io::Result<()> {
 
     // testing network connections
     if rank == 0 {
-        socks[0].write("Hello world".as_bytes())?;
+        socks[1].write("Hello world".as_bytes())?;
         let mut buffer = [0; 30];
         socks[1].read(&mut buffer)?;
         println!("{}", String::from_utf8_lossy(&buffer));
-    } else {
+        socks[2].read(&mut buffer)?;
+        
+        println!("{}", String::from_utf8_lossy(&buffer));
+    } else if rank == 1 {
         let mut buffer = [0; 11];
         socks[0].read(&mut buffer)?;
         println!("{}", String::from_utf8_lossy(&buffer));
-        socks[1].write("Hello from the other side".as_bytes())?;
+        socks[0].write("Hello from party 1".as_bytes())?;
+    } else {
+        socks[0].write("Hello from party 2".as_bytes())?;
     }
 
     // printing input files
@@ -28,5 +33,5 @@ fn main() -> io::Result<()> {
         println!("file content: {}", String::from_utf8_lossy(&buf));
     }
     Ok(())
-    // develope server side application here ...
+    // develop server side application here ...
 }
