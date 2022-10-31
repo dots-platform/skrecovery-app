@@ -76,7 +76,9 @@ A typical decentralized application consists of the following steps:
 The above workflow only provides a general guideline for developing decentralized applications. A decentralized application does not need to follow these steps exactly. Each step is separate and composable from each other, and can be optional depending on the specific application you are building. For example, an app that does secret-key recovery does not have any server side computations, so it can skip step 2.  
 
 # Tutorials
-To learn more about the BDoTS platform as well as this example application, checkout our [tutorial](tutorial.md). The tutorial will equip you with the necessary knowledge to develop your own decentralized applications on BDoTS.
+To learn more about the BDoTS platform as well as this example application, checkout our [tutorial](tutorial.md) . They will equip you with the necessary knowledge to develop your own decentralized applications on BDoTS.
+
+We add a [second tutorial](tutorial2.md) specifically on how to develop server-side applications. Check it out if your project has server-side functionalities. 
 
 # Join our Discord channels
 If you are have any questions or want to hear about our latest updates, come join our [discord](https://discord.gg/uVVyTFDpXV) channel.
