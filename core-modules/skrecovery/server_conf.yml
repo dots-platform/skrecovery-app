@@ -1,0 +1,16 @@
+---
+nodes:
+  node1:
+    addr: "127.0.0.1"
+    port: 50051      # port for connection between client and server
+    tcp_port: 50053  # port for setting up tcp connections between nodes
+  node2:
+    addr: "127.0.0.1"
+    port: 50052      
+    tcp_port: 50054
+
+apps:
+  example_app:
+    path: "./core-modules/pki/target/debug/example_app"
+
+file_storage_dir: "./core-modules/pki/files"
