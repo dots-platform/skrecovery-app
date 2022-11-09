@@ -81,4 +81,4 @@ To learn more about the BDoTS platform as well as this example application, chec
 We add a [second tutorial](tutorial2.md) specifically on how to develop server-side applications. Check it out if your project has server-side functionalities. 
 
 # Join our Discord channels
-If you are have any questions or want to hear about our latest updates, come join our [discord](https://discord.gg/uVVyTFDpXV) channel.
+If you have any questions or want to hear about our latest updates, come join our [discord](https://discord.gg/uVVyTFDpXV) channel.
