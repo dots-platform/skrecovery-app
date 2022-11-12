@@ -1,32 +1,12 @@
-use curv::elliptic::curves::Secp256k1;
 use dtrust::utils::init_app;
 use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::keygen::{
-    Keygen, LocalKey, ProtocolMessage,
+    Keygen, ProtocolMessage,
 };
 use round_based::{Msg, StateMachine};
 use std::{
     io::{self, Read, Write},
     net::TcpStream,
-    path::PathBuf,
 };
-use structopt::StructOpt;
-
-#[derive(Debug, StructOpt)]
-pub struct Cli {
-    #[structopt(short, long, default_value = "http://localhost:8000/")]
-    pub address: surf::Url,
-    #[structopt(short, long, default_value = "default-keygen")]
-    pub room: String,
-    #[structopt(short, long)]
-    pub output: PathBuf,
-
-    #[structopt(short, long)]
-    pub index: u16,
-    #[structopt(short, long)]
-    pub threshold: u16,
-    #[structopt(short, long)]
-    pub number_of_parties: u16,
-}
 
 // Handle all received messages
 fn receive(socks: &mut Vec<TcpStream>, party: &mut Keygen, party_index: u16) -> io::Result<()> {
@@ -94,7 +74,7 @@ fn p2p(
     Ok(())
 }
 
-fn run_keygen(
+fn keygen(
     num_parties: u16,
     num_threshold: u16,
     socks: &mut Vec<TcpStream>,
@@ -137,16 +117,23 @@ fn run_keygen(
     Ok(())
 }
 
+
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    let (rank, func_name, _in_files, _out_files, mut socks) = init_app()?;
+    let (rank, func_name, in_files, _out_files, mut socks) = init_app()?;
+
+    let mut param_buf = [0; 10];
+    let mut f = in_files.first().unwrap();
+    f.read(&mut param_buf)?;
+    let param_str = String::from_utf8_lossy(&param_buf);
+    let params: Vec<&str> = param_str.split(" ").collect();
 
     // Keygen
     if func_name == "keygen" {
-        let num_parties = 3 as u16;
-        let num_threshold = 1 as u16;
+        let num_parties = params[0].parse::<u16>().unwrap();
+        let num_threshold = params[1].trim_matches(char::from(0)).parse::<u16>().unwrap();
         let party_index = (rank + 1) as u16;
-        run_keygen(num_parties, num_threshold, &mut socks, party_index)?;
+        keygen(num_parties, num_threshold, &mut socks, party_index)?;
 
     // Signing
     } else if func_name == "signing" {
