@@ -27,30 +27,57 @@ impl ThresholdSigning for Client {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
-    let num_parties = args[1].parse().unwrap();
-    let num_threshold = args[2].parse().unwrap();
+    let func_name = args[1].clone();
+    let num_parties = args[2].parse().unwrap();
+    let num_threshold = args[3].parse().unwrap();
 
-    let node_addrs = [
-        "http://127.0.0.1:50051",
-        "http://127.0.0.1:50052",
-        "http://127.0.0.1:50053",
-    ];
-    let in_files = [String::from("user1")]; // TODO: Fill in with signing input file message to sign
-    let out_files = [String::from("keys")]; // TODO: Fill in with keygen output files
+    if func_name == "keygen" {
+        let node_addrs = [
+            "http://127.0.0.1:50051",
+            "http://127.0.0.1:50052",
+            "http://127.0.0.1:50053",
+        ];
 
-    let cli_id = "user1";
-    let app_name = "rust_app";
-    let mut client = Client::new(cli_id);
+        let in_files = [String::from("user1")]; // TODO: Fill in with signing input file message to sign
+        let out_files = [String::from("keys.json")]; // TODO: Fill in with keygen output files
 
-    client.setup(node_addrs.to_vec());
+        let cli_id = "user1";
+        let app_name = "rust_app";
+        let mut client = Client::new(cli_id);
 
-    client
-        .upload_params(String::from(cli_id), num_threshold, num_parties)
-        .await;
+        client.setup(node_addrs.to_vec());
 
-    client
-        .exec(app_name, "keygen", in_files.to_vec(), out_files.to_vec())
-        .await?;
-    // client.exec(app_name, "signing", in_files.to_vec(), out_files.to_vec()).await?;
+        client
+            .upload_params(String::from(cli_id), num_threshold, num_parties)
+            .await;
+
+        client
+            .exec(app_name, "keygen", in_files.to_vec(), out_files.to_vec())
+            .await?;
+    } else if func_name == "signing" {
+        let node_addrs = [
+            "http://127.0.0.1:50051",
+            "http://127.0.0.1:50052",
+            "http://127.0.0.1:50053"
+        ];
+
+        let in_files = [String::from("user1"), String::from("keys.json")]; // TODO: Fill in with signing input file message to sign
+        let out_files = [String::from("signature")]; // TODO: Fill in with keygen output files
+
+        let cli_id = "user1";
+        let app_name = "rust_app";
+        let mut client = Client::new(cli_id);
+
+        client.setup(node_addrs.to_vec());
+
+        client
+            .upload_params(String::from(cli_id), num_threshold, num_parties)
+            .await;
+
+        client
+            .exec(app_name, "signing", in_files.to_vec(), out_files.to_vec())
+            .await?;
+    }
+
     Ok(())
 }
