@@ -47,10 +47,12 @@ name = "gg20_sm_manager"
 name = "keygen_test"
 
 [[bin]]
-name = "signing_client"
+name = "client"
+path = "client/signing_client.rs"
 
 [[bin]]
-name = "signing_server"
+name = "rust_app"
+path = "server/signing_server.rs"
 
 [lib]
 name = "signing"

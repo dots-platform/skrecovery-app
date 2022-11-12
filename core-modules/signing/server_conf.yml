@@ -14,4 +14,4 @@ apps:
   rust_app:
     path: "./core-modules/signing/target/debug/rust_app"
 
-file_storage_dir: "./core-modules/template/files"
+file_storage_dir: "./core-modules/signing/files"

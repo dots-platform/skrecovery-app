@@ -1,30 +1,30 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct App {
-    #[prost(string, tag="1")]
+    #[prost(string, tag = "1")]
     pub app_name: ::prost::alloc::string::String,
-    #[prost(int64, tag="2")]
+    #[prost(int64, tag = "2")]
     pub app_uid: i64,
-    #[prost(string, tag="3")]
+    #[prost(string, tag = "3")]
     pub func_name: ::prost::alloc::string::String,
-    #[prost(string, repeated, tag="4")]
+    #[prost(string, repeated, tag = "4")]
     pub in_files: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-    #[prost(string, repeated, tag="5")]
+    #[prost(string, repeated, tag = "5")]
     pub out_files: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-    #[prost(string, tag="6")]
+    #[prost(string, tag = "6")]
     pub client_id: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Blob {
-    #[prost(string, tag="1")]
+    #[prost(string, tag = "1")]
     pub key: ::prost::alloc::string::String,
-    #[prost(bytes="vec", tag="2")]
+    #[prost(bytes = "vec", tag = "2")]
     pub val: ::prost::alloc::vec::Vec<u8>,
-    #[prost(string, tag="3")]
+    #[prost(string, tag = "3")]
     pub client_id: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Result {
-    #[prost(string, tag="1")]
+    #[prost(string, tag = "1")]
     pub result: ::prost::alloc::string::String,
 }
 /// Generated client implementations.
