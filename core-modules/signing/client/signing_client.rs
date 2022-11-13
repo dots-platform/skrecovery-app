@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ];
 
         let in_files = [String::from("user1")]; // TODO: Fill in with signing input file message to sign
-        let out_files = [String::from("keys.json")]; // TODO: Fill in with keygen output files
+        let out_files = [String::from("key.json")]; // TODO: Fill in with keygen output files
 
         let cli_id = "user1";
         let app_name = "rust_app";
@@ -61,8 +61,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "http://127.0.0.1:50053"
         ];
 
-        let in_files = [String::from("user1"), String::from("keys.json")]; // TODO: Fill in with signing input file message to sign
-        let out_files = [String::from("signature")]; // TODO: Fill in with keygen output files
+        let in_files = [String::from("user1"), String::from("key.json")]; // TODO: Fill in with signing input file message to sign
+        let out_files = [String::from("signature.json")]; // TODO: Fill in with keygen output files
 
         let cli_id = "user1";
         let app_name = "rust_app";
