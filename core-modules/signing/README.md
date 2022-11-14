@@ -12,12 +12,26 @@ brew install rust
 brew install gmp
 ```
 
-### Build
-
-In `core-apps/signing` folder:
+# Initialize Decentralized Nodes
+In the `dtrust` folder, start 3 nodes in three separate terminals:
+```jsx
+./platform/init_server --node_id node1 --config ./core-modules/signing/server_conf.yml
+```
 
 ```jsx
-cargo build --release --all-targets
+./platform/init_server --node_id node2 --config ./core-modules/signing/server_conf.yml
+```
+
+```jsx
+./platform/init_server --node_id node3 --config ./core-modules/signing/server_conf.yml
+```
+
+
+# Start Server
+`cd` into `core-modules/signing`. Start the server:
+```jsx
+cargo build
+cargo run --bin rust_app
 ```
 
 MacOS has a [known issue](https://github.com/ZenGo-X/multi-party-ecdsa/issues/66) where `rustc` has trouble locating the `gmp` library. You may see something similar to the following error:
@@ -33,49 +47,32 @@ If this happens, link the library manually by running:
 export LIBRARY_PATH=$LIBRARY_PATH:/opt/homebrew/lib
 export INCLUDE_PATH=$INCLUDE_PATH:/opt/homebrew/include
 ```
-
-# Start Server
-
-`cd` into `core-apps/target/release/`. Start the server:
-
-```jsx
-./gg20_sm_manager
-```
+Now, restart the server.
 
 # KeyGen
-
-We will generate keys for a scheme that has 3 separate parties and a threshold of 1 party.
-
-In 3 separate terminal windows:
+We will generate keys for a scheme that has 3 separate parties and a threshold of 1 party. In a new terminal, run:
 
 ```jsx
-./gg20_keygen -t 1 -n 3 -i 1 --output local-share1.json
+cargo run --bin client keygen 3 1
 ```
-
-```jsx
-./gg20_keygen -t 1 -n 3 -i 2 --output local-share2.json
-```
-
-```jsx
-./gg20_keygen -t 1 -n 3 -i 3 --output local-share3.json
-```
-
-The `local-share` components are the secret keys.
+The local key shares will be generated as files:
+- In `dtrust/signing/files/node1/key.json`, you will find the key for party 1.
+- In `dtrust/signing/files/node2/key.json`, you will find the key for party 2.
+- In `dtrust/signing/files/node3/key.json`, you will find the key for party 3.
 
 # Signing
 
-We will sign the message `“hello”` by passing in the indices of the parties who attended the signing (`-p 1,2`).
+We will sign the message `“hello”` by passing in the indices of the parties who attended the signing (`1,2`). In a new terminal, run:
 
 ```jsx
-./gg20_signing -p 1,2 -d "hello" -l local-share1.json
+cargo run --bin client signing 3 1 1,2 hello
 ```
+The resulting signature will be generated as a file:
+- In `dtrust/signing/files/node1/signature.json`, you will find the key for party 1.
+- In `dtrust/signing/files/node2/signature.json`, you will find the key for party 2.
+- In `dtrust/signing/files/node3/signature.json`, you will find nothing (not an active party).
 
-```jsx
-./gg20_signing -p 1,2 -d "hello" -l local-share2.json
-```
-
-The output will be the joint signature. It should look something like this:
-
+The joint signature will look something like this:
 ```jsx
 {
    "r":{
