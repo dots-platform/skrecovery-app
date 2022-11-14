@@ -1,4 +1,3 @@
-use core::num;
 use std::env;
 
 use dtrust::client::Client;
