@@ -83,24 +83,22 @@ fn broadcast(
 // Broadcast signature message to all other parties
 // TODO: Consolidate with other broadcast function
 fn broadcast_sign(
-    msg_queue: &mut Vec<Msg<OfflineProtocolMessage>>,
+    msg: Msg<OfflineProtocolMessage>,
     socks: &mut Vec<TcpStream>,
     party: &mut OfflineStage,
     party_index: u16,
     num_threshold: u16,
     active_parties: &Vec<u16>
 ) {
-    for msg in msg_queue.iter() {
-        // Serialize message
-        let serialized = serde_json::to_string(&msg).unwrap();
+    // Serialize message
+    let serialized = serde_json::to_string(&msg).unwrap();
 
-        // Send to all other recipients
-        for recipient in active_parties {
-            let sender = party_index as usize;
-            if *recipient != sender as u16 {
-                // Send message to recipient
-                socks[*recipient as usize - 1].write(serialized.as_bytes());
-            }
+    // Send to all other recipients
+    for recipient in active_parties {
+        let sender = party_index as usize;
+        if *recipient != sender as u16 {
+            // Send message to recipient
+            socks[*recipient as usize - 1].write(serialized.as_bytes());
         }
     }
     receive_sign(socks, party, party_index, &active_parties);
@@ -229,7 +227,6 @@ fn keygen(
 }
 
 fn sign(
-    num_parties: u16,
     num_threshold: u16,
     active_parties: Vec<u16>,
     key: LocalKey<Secp256k1>,
@@ -245,11 +242,8 @@ fn sign(
     // TODO: Comment signing protocol rounds
     let mut offline_stage = OfflineStage::new(party_index, active_parties.clone(), key).unwrap();
     offline_stage.proceed();
-    let mut msg_queue = vec![];
-    let msg = offline_stage.message_queue()[0].clone();
-    msg_queue.push(msg);
     broadcast_sign(
-        &mut msg_queue,
+        offline_stage.message_queue()[0].clone(),
         socks,
         &mut offline_stage,
         party_index,
@@ -257,7 +251,7 @@ fn sign(
         &active_parties
     );
     offline_stage.proceed();
-    msg_queue.clear();
+    let mut msg_queue = vec![];
     for i in 0..num_threshold {
         let msg_index = (i + 1) as usize;
         msg_queue.push(offline_stage.message_queue()[msg_index].clone());
@@ -270,11 +264,17 @@ fn sign(
         &active_parties
     );
     offline_stage.proceed();
-    msg_queue.clear();
-    let msg = offline_stage.message_queue()[(num_threshold + 1) as usize].clone();
-    msg_queue.push(msg);
     broadcast_sign(
-        &mut msg_queue,
+        offline_stage.message_queue()[(num_threshold + 1) as usize].clone(),
+        socks,
+        &mut offline_stage,
+        party_index,
+        num_threshold,
+        &active_parties
+    );
+    offline_stage.proceed();
+    broadcast_sign(
+        offline_stage.message_queue()[(num_threshold + 2) as usize].clone(),
         socks,
         &mut offline_stage,
         party_index,
@@ -283,34 +283,8 @@ fn sign(
     );
     msg_queue.clear();
     offline_stage.proceed();
-    let msg = offline_stage.message_queue()[(num_threshold + 2) as usize].clone();
-    msg_queue.push(msg);
     broadcast_sign(
-        &mut msg_queue,
-        socks,
-        &mut offline_stage,
-        party_index,
-        num_threshold,
-        &active_parties
-    );
-    msg_queue.clear();
-    offline_stage.proceed();
-    let msg = offline_stage.message_queue()[(num_threshold + 3) as usize].clone();
-    msg_queue.push(msg);
-    broadcast_sign(
-        &mut msg_queue,
-        socks,
-        &mut offline_stage,
-        party_index,
-        num_threshold,
-        &active_parties
-    );
-    msg_queue.clear();
-    offline_stage.proceed();
-    let msg = offline_stage.message_queue()[(num_threshold + 4) as usize].clone();
-    msg_queue.push(msg);
-    broadcast_sign(
-        &mut msg_queue,
+        offline_stage.message_queue()[(num_threshold + 3) as usize].clone(),
         socks,
         &mut offline_stage,
         party_index,
@@ -318,7 +292,15 @@ fn sign(
         &active_parties
     );
     offline_stage.proceed();
-    msg_queue.clear();
+    broadcast_sign(
+        offline_stage.message_queue()[(num_threshold + 4) as usize].clone(),
+        socks,
+        &mut offline_stage,
+        party_index,
+        num_threshold,
+        &active_parties
+    );
+    offline_stage.proceed();
 
     let message_int = &BigInt::from_bytes(&message);
     let offline_output = offline_stage.pick_output().unwrap().unwrap();
@@ -369,7 +351,7 @@ fn main() -> io::Result<()> {
         msg_file.read(&mut msg_buf)?;
         let msg_buf = String::from_utf8_lossy(&msg_buf).trim_matches(char::from(0)).as_bytes().to_vec();
         
-        let signature = sign(num_parties, num_threshold, active_parties, key, &mut socks, party_index, msg_buf)?;
+        let signature = sign(num_threshold, active_parties, key, &mut socks, party_index, msg_buf)?;
         let mut f = &out_files[0];
         f.write(&signature)?;
     }
