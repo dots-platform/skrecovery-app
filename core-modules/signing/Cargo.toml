@@ -32,31 +32,12 @@ mio = "0.8"
 tokio-core = "0.1"
 
 [[bin]]
-name = "gg20_keygen"
-
-[[bin]]
-name = "gg20_signing"
-
-[[bin]]
-name = "gg20_sm_client"
-
-[[bin]]
-name = "gg20_sm_manager"
-
-[[bin]]
-name = "keygen_test"
-
-[[bin]]
 name = "client"
 path = "client/signing_client.rs"
 
 [[bin]]
 name = "rust_app"
 path = "server/signing_server.rs"
-
-[lib]
-name = "signing"
-path = "src/lib.rs"
 
 [dependencies.multi-party-ecdsa]
 git = "https://github.com/ZenGo-X/multi-party-ecdsa"
