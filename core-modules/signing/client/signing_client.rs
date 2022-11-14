@@ -54,8 +54,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .upload_params(String::from(cli_id), num_threshold, num_parties, "".to_string())
         .await;
 
-        let in_files = [String::from("user1")]; // TODO: Fill in with signing input file message to sign
-        let out_files = [String::from("key.json")]; // TODO: Fill in with keygen output files
+        let in_files = [String::from("user1")]; 
+        let out_files = [String::from("key.json")]; 
 
         client
             .exec(app_name, "keygen", in_files.to_vec(), out_files.to_vec())
@@ -68,8 +68,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .upload_params(String::from(cli_id), num_threshold, num_parties, active_parties)
         .await;
 
-        let in_files = [String::from("user1"), String::from("key.json"), String::from("message")]; // TODO: Fill in with signing input file message to sign
-        let out_files = [String::from("signature.json")]; // TODO: Fill in with keygen output files
+        let in_files = [String::from("user1"), String::from("key.json"), String::from("message")]; 
+        let out_files = [String::from("signature.json")]; 
 
         client.upload_message(String::from("message"), message).await;
 

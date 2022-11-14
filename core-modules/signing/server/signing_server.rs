@@ -336,9 +336,10 @@ fn sign(
         return Ok(Vec::new());
     }
     // Initiate offline phase
-    // TODO: Comment signing protocol rounds
     let mut offline_stage = OfflineStage::new(party_index, active_parties.clone(), key).unwrap();
     offline_stage.proceed().map_err(|e| Error::new(ErrorKind::Other, e))?;
+
+    // Round 1
     broadcast_sign(
         offline_stage.message_queue()[0].clone(),
         socks,
@@ -347,6 +348,8 @@ fn sign(
         &active_parties,
     )?;
     offline_stage.proceed().map_err(|e| Error::new(ErrorKind::Other, e))?;
+
+    // Round 2
     let mut msg_queue = vec![];
     for i in 0..num_threshold {
         let msg_index = (i + 1) as usize;
@@ -360,6 +363,8 @@ fn sign(
         &active_parties,
     )?;
     offline_stage.proceed().map_err(|e| Error::new(ErrorKind::Other, e))?;
+
+    // Round 3
     broadcast_sign(
         offline_stage.message_queue()[(num_threshold + 1) as usize].clone(),
         socks,
@@ -368,6 +373,8 @@ fn sign(
         &active_parties,
     )?;
     offline_stage.proceed().map_err(|e| Error::new(ErrorKind::Other, e))?;
+
+    // Round 4
     broadcast_sign(
         offline_stage.message_queue()[(num_threshold + 2) as usize].clone(),
         socks,
@@ -375,8 +382,9 @@ fn sign(
         party_index,
         &active_parties,
     )?;
-    msg_queue.clear();
     offline_stage.proceed().map_err(|e| Error::new(ErrorKind::Other, e))?;
+
+    // Round 5
     broadcast_sign(
         offline_stage.message_queue()[(num_threshold + 3) as usize].clone(),
         socks,
@@ -385,6 +393,8 @@ fn sign(
         &active_parties,
     )?;
     offline_stage.proceed().map_err(|e| Error::new(ErrorKind::Other, e))?;
+
+    // Round 6
     broadcast_sign(
         offline_stage.message_queue()[(num_threshold + 4) as usize].clone(),
         socks,
@@ -394,6 +404,7 @@ fn sign(
     )?;
     offline_stage.proceed().map_err(|e| Error::new(ErrorKind::Other, e))?;
 
+    // Sign message
     let message_int = &BigInt::from_bytes(&message);
     let offline_output = offline_stage.pick_output().unwrap().unwrap();
     sign_message(
