@@ -68,8 +68,8 @@ We will sign the message `“hello”` by passing in the indices of the parties 
 cargo run --bin client signing 3 1 1,2 hello
 ```
 The resulting signature will be generated as a file:
-- In `dtrust/signing/files/node1/signature.json`, you will find the key for party 1.
-- In `dtrust/signing/files/node2/signature.json`, you will find the key for party 2.
+- In `dtrust/signing/files/node1/signature.json`, you will find the joint signature.
+- In `dtrust/signing/files/node2/signature.json`, you will find the joint signature.
 - In `dtrust/signing/files/node3/signature.json`, you will find nothing (not an active party).
 
 The joint signature will look something like this:
