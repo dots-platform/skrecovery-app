@@ -61,22 +61,20 @@ fn receive_sign(
 
 // Broadcast message to all other parties
 fn broadcast(
-    msg_queue: &mut Vec<Msg<ProtocolMessage>>,
+    msg: Msg<ProtocolMessage>,
     socks: &mut Vec<TcpStream>,
     party: &mut Keygen,
     party_index: u16,
 ) {
-    for msg in msg_queue.iter() {
-        // Serialize message
-        let serialized = serde_json::to_string(&msg).unwrap();
+    // Serialize message
+    let serialized = serde_json::to_string(&msg).unwrap();
 
-        // Send to all other recipients
-        for recipient in 1..(socks.len() + 1) {
-            let sender = party_index as usize;
-            if recipient != sender {
-                // Send message to recipient
-                socks[recipient - 1].write(serialized.as_bytes());
-            }
+    // Send to all other recipients
+    for recipient in 1..(socks.len() + 1) {
+        let sender = party_index as usize;
+        if recipient != sender {
+            // Send message to recipient
+            socks[recipient - 1].write(serialized.as_bytes());
         }
     }
     receive(socks, party, party_index);
@@ -115,6 +113,7 @@ fn p2p(
     party: &mut Keygen,
     party_index: u16,
 ) {
+    println!("Message length {:?}", msg_queue.len());
     for msg in msg_queue.iter() {
         // Serialize message
         let serialized = serde_json::to_string(&msg).unwrap();
@@ -200,24 +199,19 @@ fn keygen(
     socks: &mut Vec<TcpStream>,
     party_index: u16,
 ) -> Result<Vec<u8>, serde_json::Error> {
-    // Set up a party KeyGen state machine the current rank
+    // Set up current rank's party KeyGen state machine
     let mut party = Keygen::new(party_index, num_threshold, num_parties).unwrap();
-    // Unsent messages sit in this queue each round
-    let mut msg_queue = vec![];
 
     // Round 1
     party.proceed();
-    msg_queue.push(party.message_queue()[0].clone());
-    broadcast(&mut msg_queue, socks, &mut party, party_index);
-    msg_queue.clear();
+    broadcast(party.message_queue()[0].clone(), socks, &mut party, party_index);
 
     // Round 2
-    msg_queue.push(party.message_queue()[1].clone());
-    broadcast(&mut msg_queue, socks, &mut party, party_index);
+    broadcast(party.message_queue()[1].clone(), socks, &mut party, party_index);
     party.proceed();
 
     // Round 3
-    msg_queue.clear();
+    let mut msg_queue = vec![];
     for i in 0..num_parties - 1 {
         let msg_index = (i + 2) as usize;
         msg_queue.push(party.message_queue()[msg_index].clone());
@@ -226,10 +220,7 @@ fn keygen(
     p2p(&mut msg_queue, socks, &mut party, party_index);
     party.proceed();
 
-    msg_queue.clear();
-    msg_queue.push(party.message_queue()[(num_parties + 1) as usize].clone());
-
-    broadcast(&mut msg_queue, socks, &mut party, party_index);
+    broadcast(party.message_queue()[(num_parties + 1) as usize].clone(), socks, &mut party, party_index);
     party.proceed();
 
     let local_key = party.pick_output().unwrap().unwrap();
