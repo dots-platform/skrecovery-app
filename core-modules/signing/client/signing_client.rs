@@ -37,8 +37,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let func_name = args[1].clone();
     let num_parties = args[2].parse().unwrap();
     let num_threshold = args[3].parse().unwrap();
-    let active_parties = args[4].parse().unwrap();
-    let message = args[5].parse().unwrap();
 
     let node_addrs = [
         "http://127.0.0.1:50051",
@@ -52,11 +50,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     client.setup(node_addrs.to_vec());
 
-    client
-        .upload_params(String::from(cli_id), num_threshold, num_parties, active_parties)
+    if func_name == "keygen" {
+        client
+        .upload_params(String::from(cli_id), num_threshold, num_parties, "".to_string())
         .await;
 
-    if func_name == "keygen" {
         let in_files = [String::from("user1")]; // TODO: Fill in with signing input file message to sign
         let out_files = [String::from("key.json")]; // TODO: Fill in with keygen output files
 
@@ -64,6 +62,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .exec(app_name, "keygen", in_files.to_vec(), out_files.to_vec())
             .await?;
     } else if func_name == "signing" {
+        let active_parties = args[4].parse().unwrap();
+        let message = args[5].parse().unwrap();
+
+        client
+        .upload_params(String::from(cli_id), num_threshold, num_parties, active_parties)
+        .await;
+
         let in_files = [String::from("user1"), String::from("key.json"), String::from("message")]; // TODO: Fill in with signing input file message to sign
         let out_files = [String::from("signature.json")]; // TODO: Fill in with keygen output files
 
