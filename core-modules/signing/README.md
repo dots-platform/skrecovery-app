@@ -65,7 +65,7 @@ The local key shares will be generated as files:
 We will sign the message `“hello”` by passing in the indices of the parties who attended the signing (`1,2`). In a new terminal, run:
 
 ```jsx
-cargo run --bin client signing 3 1 1,2 hello
+cargo run --bin client sign 3 1 1,2 hello
 ```
 The resulting signature will be generated as a file:
 - In `dtrust/signing/files/node1/signature.json`, you will find the joint signature.

@@ -33,11 +33,11 @@ tokio-core = "0.1"
 
 [[bin]]
 name = "client"
-path = "client/signing_client.rs"
+path = "client/main.rs"
 
 [[bin]]
 name = "rust_app"
-path = "server/signing_server.rs"
+path = "server/app.rs"
 
 [dependencies.multi-party-ecdsa]
 git = "https://github.com/ZenGo-X/multi-party-ecdsa"
