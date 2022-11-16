@@ -209,15 +209,15 @@ fn p2p_sign(
 /// * `socks` - Peer-to-peer socket TCP connections between parties
 /// * `active_parties` - Parties participating in producing the signature
 fn sign_message(
-    msg_to_sign: &BigInt,
+    msg_to_sign: BigInt,
     party_index: u16,
-    offline_output: &CompletedOfflineStage,
+    offline_output: CompletedOfflineStage,
     socks: &mut Vec<TcpStream>,
     active_parties: &Vec<u16>,
 ) -> Result<Vec<u8>, Error> {
     // Obtain party's partial share
     let (manual_sign, partial_share) =
-        SignManual::new(msg_to_sign.clone(), offline_output.clone()).unwrap();
+        SignManual::new(msg_to_sign, offline_output).unwrap();
 
     // Send to all other parties
     // Serialize message
@@ -405,12 +405,12 @@ fn sign(
     offline_stage.proceed().map_err(|e| Error::new(ErrorKind::Other, e))?;
 
     // Sign message
-    let message_int = &BigInt::from_bytes(&message);
+    let message_int = BigInt::from_bytes(&message);
     let offline_output = offline_stage.pick_output().unwrap().unwrap();
     sign_message(
         message_int,
         party_index,
-        &offline_output,
+        offline_output,
         socks,
         &active_parties,
     )
