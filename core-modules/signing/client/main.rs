@@ -3,42 +3,62 @@ use std::env;
 use dtrust::client::Client;
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum Params {
+    K {
+        num_threshold: u16,
+        num_parties: u16,
+    },
+    S {
+        num_threshold: u16,
+        active_parties: Vec<u16>,
+        message: String,
+    },
+}
 
 #[async_trait]
 pub trait ThresholdSigning {
-    async fn upload_params(
+    async fn upload_keygen_params(&self, id: String, num_threshold: u16, num_parties: u16);
+
+    async fn upload_sign_params(
         &self,
         id: String,
-        num_threshold: String,
-        num_parties: String,
-        active_parties: String,
+        num_threshold: u16,
+        active_parties: Vec<u16>,
+        message: String,
     );
-    async fn upload_message(&self, id: String, message: String);
 }
 
 #[async_trait]
 impl ThresholdSigning for Client {
-    async fn upload_params(
+    async fn upload_keygen_params(&self, id: String, num_threshold: u16, num_parties: u16) {
+        let params = Params::K {
+            num_threshold,
+            num_parties,
+        };
+        let json = serde_json::to_vec(&params).unwrap();
+        let upload_val = vec![json; self.node_addrs.len()];
+        self.upload_blob(id.clone() + ".json", upload_val).await;
+    }
+
+    async fn upload_sign_params(
         &self,
         id: String,
-        num_threshold: String,
-        num_parties: String,
-        active_parties: String,
+        num_threshold: u16,
+        active_parties: Vec<u16>,
+        message: String,
     ) {
-        let params = [
-            num_parties.as_bytes().to_vec(),
-            (" ").as_bytes().to_vec(),
-            num_threshold.as_bytes().to_vec(),
-            (" ").as_bytes().to_vec(),
-            active_parties.as_bytes().to_vec(),
-        ]
-        .concat();
-        let upload_val = vec![params; self.node_addrs.len()];
-        self.upload_blob(id.clone(), upload_val).await;
-    }
-    async fn upload_message(&self, id: String, message: String) {
-        let upload_val = vec![message.as_bytes().to_vec(); self.node_addrs.len()];
-        self.upload_blob(id.clone(), upload_val).await;
+        let params = Params::S {
+            num_threshold,
+            active_parties,
+            message,
+        };
+        let json = serde_json::to_vec(&params).unwrap();
+        let upload_val = vec![json; self.node_addrs.len()];
+        self.upload_blob(id.clone() + ".json", upload_val).await;
     }
 }
 
@@ -46,7 +66,7 @@ impl ThresholdSigning for Client {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     let cmd = &args[1];
-    
+
     let node_addrs = [
         "http://127.0.0.1:50051",
         "http://127.0.0.1:50052",
@@ -58,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut client = Client::new(cli_id);
     client.setup(node_addrs.to_vec());
 
-    let num_parties: String = match args[2].parse() {
+    let num_parties: u16 = match args[2].parse() {
         Ok(s) => s,
         Err(_) => {
             eprintln!("error: num_parties not a string");
@@ -66,7 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let num_threshold: String = match args[3].parse() {
+    let num_threshold: u16 = match args[3].parse() {
         Ok(s) => s,
         Err(_) => {
             eprintln!("error: num_threshold not a string");
@@ -85,15 +105,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match &cmd[..] {
         "keygen" => {
             client
-                .upload_params(
-                    String::from(cli_id),
-                    num_threshold,
-                    num_parties,
-                    "".to_string(),
-                )
+                .upload_keygen_params(String::from(cli_id), num_threshold, num_parties)
                 .await;
 
-            let in_files = [String::from("user1")];
+            let in_files = [String::from("user1.json")];
             let out_files = [key_file];
 
             client
@@ -117,25 +132,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
 
+            let active_parties_str: Vec<&str> = active_parties.split(",").collect();
+            let mut active_parties: Vec<u16> = vec![];
+            for party in active_parties_str {
+                active_parties.push(party.trim_matches(char::from(0)).parse::<u16>().unwrap());
+            }
+
             client
-                .upload_params(
-                    String::from(cli_id),
-                    num_threshold,
-                    num_parties,
-                    active_parties,
-                )
+                .upload_sign_params(String::from(cli_id), num_threshold, active_parties, message)
                 .await;
 
-            let in_files = [
-                String::from("user1"),
-                key_file,
-                String::from("message"),
-            ];
+            let in_files = [String::from("user1.json"), key_file];
             let out_files = [String::from("signature.json")];
-
-            client
-                .upload_message(String::from("message"), message)
-                .await;
 
             client
                 .exec(app_name, "signing", in_files.to_vec(), out_files.to_vec())

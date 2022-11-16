@@ -8,14 +8,14 @@ use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::{
 };
 
 use round_based::{Msg, StateMachine};
+use serde_json::Value;
 use std::{
     io::{self, Error, ErrorKind, Read, Write},
     net::TcpStream,
 };
 
 const PROTOCOL_MSG_SIZE: usize = 18000;
-const PARAM_SIZE: usize = 10;
-const MSG_SIZE: usize = 100;
+const PARAM_SIZE: usize = 100;
 
 /// This party receives incoming messages in present round of the keygen protocol
 ///
@@ -325,11 +325,11 @@ fn keygen(
 /// * `message` - Message that must be signed
 fn sign(
     num_threshold: u16,
-    active_parties: &mut Vec<u16>,
+    active_parties: &Vec<u16>,
     key: LocalKey<Secp256k1>,
     socks: &mut Vec<TcpStream>,
     party_index: u16,
-    message: Vec<u8>,
+    message: String,
 ) -> Result<Vec<u8>, Error> {
     if !active_parties.contains(&party_index) {
         println!("Party {:?} is not needed in this signature generation.", party_index);
@@ -413,7 +413,7 @@ fn sign(
         .map_err(|e| Error::new(ErrorKind::Other, e))?;
 
     // Sign message
-    let message_int = BigInt::from_bytes(&message);
+    let message_int = BigInt::from_bytes(&message.as_bytes());
     let offline_output = offline_stage.pick_output().unwrap().unwrap();
     sign_message(
         message_int,
@@ -426,55 +426,44 @@ fn sign(
 
 fn main() -> io::Result<()> {
     let (rank, func_name, in_files, out_files, mut socks) = init_app()?;
-    let mut param_buf = [0; PARAM_SIZE];
-    let mut param_file = &in_files[0];
-    param_file.read(&mut param_buf)?;
-    let param_str = String::from_utf8_lossy(&param_buf);
-    let params: Vec<&str> = param_str.split(" ").collect();
-    let num_parties = params[0].parse::<u16>().unwrap();
-    let num_threshold = params[1]
-        .trim_matches(char::from(0))
-        .parse::<u16>()
-        .unwrap();
     let party_index = (rank + 1) as u16;
+    let mut params_buf: Vec<u8> = [0; PARAM_SIZE].to_vec();
+    let mut param_file = &in_files[0];
+    param_file.read(&mut params_buf)?;
+    let params_str = String::from_utf8_lossy(&params_buf);
+    let params: Value = serde_json::from_str(params_str.trim_matches(char::from(0)))?;
 
     // Keygen
     if func_name == "keygen" {
         println!("Generating local key share for party {:?}...", party_index);
-        let key = keygen(num_parties, num_threshold, &mut socks, party_index)?;
         let mut key_file = &out_files[0];
+        let key = keygen(
+            params["num_parties"].as_u64().unwrap() as u16,
+            params["num_threshold"].as_u64().unwrap() as u16,
+            &mut socks,
+            party_index,
+        )?;
         key_file.write(&key)?;
         println!("Key generation complete!");
 
     // Signing
     } else if func_name == "signing" {
         println!("Initiating signature generation for party {:?}...", party_index);
-        let active_parties_str: Vec<&str> = params[2].split(",").collect();
-        let mut active_parties: Vec<u16> = vec![];
-        for party in active_parties_str {
-            active_parties.push(party.trim_matches(char::from(0)).parse::<u16>().unwrap());
-        }
-
         let mut key_buf: String = "".to_string();
         let mut key_file = &in_files[1];
         key_file.read_to_string(&mut key_buf).unwrap();
         let key = serde_json::from_str::<LocalKey<Secp256k1>>(&key_buf).unwrap();
 
-        let mut msg_buf: Vec<u8> = [0; MSG_SIZE].to_vec();
-        let mut msg_file = &in_files[2];
-        msg_file.read(&mut msg_buf)?;
-        let msg_buf = String::from_utf8_lossy(&msg_buf)
-            .trim_matches(char::from(0))
-            .as_bytes()
-            .to_vec();
+        let active_party_iter = params["active_parties"].as_array().unwrap().iter();
+        let active_parties : Vec<u16> = active_party_iter.map( |x| x.as_u64().unwrap() as u16).collect();
 
         let signature = sign(
-            num_threshold,
-            &mut active_parties,
+            params["num_threshold"].as_u64().unwrap() as u16,
+            &active_parties,
             key,
             &mut socks,
             party_index,
-            msg_buf,
+            params["message"].to_string(),
         )?;
 
         let mut sig_file = &out_files[0];
