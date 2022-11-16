@@ -74,6 +74,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    let key_file: String = match args[4].parse() {
+        Ok(s) => s,
+        Err(_) => {
+            eprintln!("error: key_file not a string");
+            panic!("");
+        }
+    };
+
     match &cmd[..] {
         "keygen" => {
             client
@@ -86,14 +94,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .await;
 
             let in_files = [String::from("user1")];
-            let out_files = [String::from("key.json")];
+            let out_files = [key_file];
 
             client
                 .exec(app_name, "keygen", in_files.to_vec(), out_files.to_vec())
                 .await?;
         }
         "sign" => {
-            let active_parties: String = match args[4].parse() {
+            let active_parties: String = match args[5].parse() {
                 Ok(n) => n,
                 Err(_) => {
                     eprintln!("error: active_parties not a string");
@@ -101,7 +109,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
 
-            let message: String = match args[5].parse() {
+            let message: String = match args[6].parse() {
                 Ok(n) => n,
                 Err(_) => {
                     eprintln!("error: message not a string");
@@ -120,7 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let in_files = [
                 String::from("user1"),
-                String::from("key.json"),
+                key_file,
                 String::from("message"),
             ];
             let out_files = [String::from("signature.json")];
