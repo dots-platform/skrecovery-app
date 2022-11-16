@@ -9,7 +9,7 @@ use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::{
 
 use round_based::{Msg, StateMachine};
 use std::{
-    io::{self, Read, Write, Error, ErrorKind},
+    io::{self, Error, ErrorKind, Read, Write},
     net::TcpStream,
 };
 
@@ -43,7 +43,9 @@ fn receive_keygen(
             .unwrap();
 
             // Process received broadcast message
-            party.handle_incoming(received_msg).map_err(|e| Error::new(ErrorKind::Other, e))?;
+            party
+                .handle_incoming(received_msg)
+                .map_err(|e| Error::new(ErrorKind::Other, e))?;
         }
     }
     Ok(())
@@ -76,7 +78,9 @@ fn receive_sign(
             )
             .unwrap();
             // Process received broadcast message
-            party.handle_incoming(received_msg).map_err(|e| Error::new(ErrorKind::Other, e))?;
+            party
+                .handle_incoming(received_msg)
+                .map_err(|e| Error::new(ErrorKind::Other, e))?;
         }
     }
     Ok(())
@@ -86,16 +90,18 @@ fn receive_sign(
 ///
 /// # Arguments
 ///
-/// * `msg` - Message this party is broadcasting to all other parties
+/// * `msg_index` - Index of message which this party is broadcasting to all other parties
 /// * `socks` - Peer-to-peer socket TCP connections between parties
 /// * `party` - KeyGen protocol state machine of current party
 /// * `party_index` - Index of current party
 fn broadcast_keygen(
-    msg: Msg<ProtocolMessage>,
+    msg_index: usize,
     socks: &mut Vec<TcpStream>,
     party: &mut Keygen,
     party_index: u16,
 ) -> io::Result<()> {
+    let msg = &party.message_queue()[msg_index];
+
     // Serialize message
     let serialized = serde_json::to_string(&msg).unwrap();
 
@@ -115,18 +121,20 @@ fn broadcast_keygen(
 ///
 /// # Arguments
 ///
-/// * `msg` - Message this party is broadcasting to all other parties
+/// * `msg` - Index of message which this party is broadcasting to all other parties
 /// * `socks` - Peer-to-peer socket TCP connections between parties
 /// * `party` - OfflineStage protocol state machine of current party
 /// * `party_index` - Index of current party
 /// * `active_parties` - Parties participating in producing the signature
 fn broadcast_sign(
-    msg: Msg<OfflineProtocolMessage>,
+    msg_index: usize,
     socks: &mut Vec<TcpStream>,
     party: &mut OfflineStage,
     party_index: u16,
     active_parties: &Vec<u16>,
 ) -> io::Result<()> {
+    let msg = &party.message_queue()[msg_index];
+
     // Serialize message
     let serialized = serde_json::to_string(&msg).unwrap();
 
@@ -168,7 +176,6 @@ fn p2p_keygen(
     receive_keygen(socks, party, party_index)?;
     Ok(())
 }
-
 
 /// Current party sends p2p messages to specific recipients in present round of the signing protocol
 ///
@@ -216,8 +223,7 @@ fn sign_message(
     active_parties: &Vec<u16>,
 ) -> Result<Vec<u8>, Error> {
     // Obtain party's partial share
-    let (manual_sign, partial_share) =
-        SignManual::new(msg_to_sign, offline_output).unwrap();
+    let (manual_sign, partial_share) = SignManual::new(msg_to_sign, offline_output).unwrap();
 
     // Send to all other parties
     // Serialize message
@@ -252,6 +258,7 @@ fn sign_message(
     }
 
     let signature = manual_sign.complete(&other_partial_shares).unwrap();
+    println!("Signature: {:?}", serde_json::to_string(&signature).unwrap());
     return serde_json::to_vec_pretty(&signature).map_err(|e| Error::new(ErrorKind::Other, e));
 }
 
@@ -273,22 +280,16 @@ fn keygen(
     let mut party = Keygen::new(party_index, num_threshold, num_parties).unwrap();
 
     // Round 1
-    party.proceed().map_err(|e| Error::new(ErrorKind::Other, e))?;
-    broadcast_keygen(
-        party.message_queue()[0].clone(),
-        socks,
-        &mut party,
-        party_index,
-    )?;
+    party
+        .proceed()
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+    broadcast_keygen(0, socks, &mut party, party_index)?;
 
     // Round 2
-    broadcast_keygen(
-        party.message_queue()[1].clone(),
-        socks,
-        &mut party,
-        party_index,
-    )?;
-    party.proceed().map_err(|e| Error::new(ErrorKind::Other, e))?;
+    broadcast_keygen(1, socks, &mut party, party_index)?;
+    party
+        .proceed()
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
 
     // Round 3
     let mut msg_queue = vec![];
@@ -298,15 +299,14 @@ fn keygen(
     }
 
     p2p_keygen(&mut msg_queue, socks, &mut party, party_index)?;
-    party.proceed().map_err(|e| Error::new(ErrorKind::Other, e))?;
+    party
+        .proceed()
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
 
-    broadcast_keygen(
-        party.message_queue()[(num_parties + 1) as usize].clone(),
-        socks,
-        &mut party,
-        party_index,
-    )?;
-    party.proceed().map_err(|e| Error::new(ErrorKind::Other, e))?;
+    broadcast_keygen((num_parties + 1) as usize, socks, &mut party, party_index)?;
+    party
+        .proceed()
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
 
     let local_key = party.pick_output().unwrap().unwrap();
 
@@ -316,7 +316,7 @@ fn keygen(
 /// Generates signature of the multi-party ECDSA threshold signing scheme for this party
 ///
 /// # Arguments
-/// 
+///
 /// * `num_threshold` - The threshold t such that the number of honest and online parties must be at least t + 1 to produce a valid signature
 /// * `active_parties` - Parties participating in producing the signature
 /// * `key` - Local key share of current party generated in the keygen phase of the protocol
@@ -332,22 +332,20 @@ fn sign(
     message: Vec<u8>,
 ) -> Result<Vec<u8>, Error> {
     if !active_parties.contains(&party_index) {
-        println!("I am not needed in this signature generation.");
+        println!("Party {:?} is not needed in this signature generation.", party_index);
         return Ok(Vec::new());
     }
     // Initiate offline phase
     let mut offline_stage = OfflineStage::new(party_index, active_parties.clone(), key).unwrap();
-    offline_stage.proceed().map_err(|e| Error::new(ErrorKind::Other, e))?;
+    offline_stage
+        .proceed()
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
 
     // Round 1
-    broadcast_sign(
-        offline_stage.message_queue()[0].clone(),
-        socks,
-        &mut offline_stage,
-        party_index,
-        &active_parties,
-    )?;
-    offline_stage.proceed().map_err(|e| Error::new(ErrorKind::Other, e))?;
+    broadcast_sign(0, socks, &mut offline_stage, party_index, &active_parties)?;
+    offline_stage
+        .proceed()
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
 
     // Round 2
     let mut msg_queue = vec![];
@@ -362,47 +360,57 @@ fn sign(
         party_index,
         &active_parties,
     )?;
-    offline_stage.proceed().map_err(|e| Error::new(ErrorKind::Other, e))?;
+    offline_stage
+        .proceed()
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
 
     // Round 3
     broadcast_sign(
-        offline_stage.message_queue()[(num_threshold + 1) as usize].clone(),
+        (num_threshold + 1) as usize,
         socks,
         &mut offline_stage,
         party_index,
         &active_parties,
     )?;
-    offline_stage.proceed().map_err(|e| Error::new(ErrorKind::Other, e))?;
+    offline_stage
+        .proceed()
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
 
     // Round 4
     broadcast_sign(
-        offline_stage.message_queue()[(num_threshold + 2) as usize].clone(),
+        (num_threshold + 2) as usize,
         socks,
         &mut offline_stage,
         party_index,
         &active_parties,
     )?;
-    offline_stage.proceed().map_err(|e| Error::new(ErrorKind::Other, e))?;
+    offline_stage
+        .proceed()
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
 
     // Round 5
     broadcast_sign(
-        offline_stage.message_queue()[(num_threshold + 3) as usize].clone(),
+        (num_threshold + 3) as usize,
         socks,
         &mut offline_stage,
         party_index,
         &active_parties,
     )?;
-    offline_stage.proceed().map_err(|e| Error::new(ErrorKind::Other, e))?;
+    offline_stage
+        .proceed()
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
 
     // Round 6
     broadcast_sign(
-        offline_stage.message_queue()[(num_threshold + 4) as usize].clone(),
+        (num_threshold + 4) as usize,
         socks,
         &mut offline_stage,
         party_index,
         &active_parties,
     )?;
-    offline_stage.proceed().map_err(|e| Error::new(ErrorKind::Other, e))?;
+    offline_stage
+        .proceed()
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
 
     // Sign message
     let message_int = BigInt::from_bytes(&message);
@@ -432,12 +440,15 @@ fn main() -> io::Result<()> {
 
     // Keygen
     if func_name == "keygen" {
+        println!("Generating local key share for party {:?}...", party_index);
         let key = keygen(num_parties, num_threshold, &mut socks, party_index)?;
         let mut key_file = &out_files[0];
         key_file.write(&key)?;
+        println!("Key generation complete!");
 
     // Signing
     } else if func_name == "signing" {
+        println!("Initiating signature generation for party {:?}...", party_index);
         let active_parties_str: Vec<&str> = params[2].split(",").collect();
         let mut active_parties: Vec<u16> = vec![];
         for party in active_parties_str {
@@ -468,6 +479,7 @@ fn main() -> io::Result<()> {
 
         let mut sig_file = &out_files[0];
         sig_file.write(&signature)?;
+        println!("Signature generation complete.");
     }
     Ok(())
 }
