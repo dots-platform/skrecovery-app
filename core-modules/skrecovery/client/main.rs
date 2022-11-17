@@ -42,10 +42,10 @@ fn shard<F: Field>(n: F, num_shards: usize, rng: &mut impl RngCore) -> Vec<F>{
 }
 
 /// There's a more rust-y way to do implement these conversions - use the From trait
-fn to_bytes<F: Field>(n: &F) -> &[u8] {
+fn to_bytes<F: Field>(n: &F) -> Vec<u8> {
     let v = Vec::new();
-    assert!(n.serialize_uncompressed(v).is_ok());
-    v.clone().as_slice()
+    assert!(n.serialize_uncompressed(&mut v).is_ok());
+    v
 }
 
 fn from_string<F: Field>(s: String) -> F {
@@ -59,17 +59,16 @@ impl SecretKeyRecoverable for Client
         let rng = &mut thread_rng();
         let sk_field = from_string::<Cfg::F>(sk_str);
         let sk_shards = shard::<Cfg::F>(sk_field, 2, rng);
-        let sk_shards_bytes = sk_shards.iter().map(|x| to_bytes::<Cfg::F>(x).to_vec())
+        let sk_shards_bytes = sk_shards.iter().map(to_bytes::<Cfg::F>)
             .collect::<Vec<_>>();
         let sk_fname = id.to_owned() + "sk";
         // maybe this naming scheme isn't secure ...
-        self.upload_blob(sk_fname, sk_shards_bytes);
-
-        let pwd_field = from_string::<Cfg::F>(pwd_str);
-        let pwd_shards = shard::<Cfg::F>(pwd_field, 2, rng);
-        let pwd_shards_bytes = pwd_shards.iter().map(|x| to_bytes::<Cfg::F>(x).to_vec()).collect::<Vec<_>>();
-        // maybe this naming scheme isn't secure ...
-        self.upload_blob(id + "pwd", pwd_shards_bytes);
+        self.upload_blob(sk_fname, sk_shards_bytes).await
+        // let pwd_field = from_string::<Cfg::F>(pwd_str);
+        // let pwd_shards = shard::<Cfg::F>(pwd_field, 2, rng);
+        // let pwd_shards_bytes = pwd_shards.iter().map(to_bytes::<Cfg::F>).collect::<Vec<_>>();
+        // // maybe this naming scheme isn't secure ...
+        // self.upload_blob(id + "pwd", pwd_shards_bytes);
     }
 
     async fn recover_sk<Cfg: SkConfig>(&self, id: String, pwd_guess: String) -> String {
