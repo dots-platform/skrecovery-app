@@ -10,6 +10,13 @@ tokio = {version = "1.13", features = ["rt", "net", "rt-multi-thread"]}
 dtrust = { path = "../../platform/core" }
 async-trait = "0.1.57"
 yaml-rust = "0.4"
+rand = "0.8.5"
+rand_chacha = "0.3.1"
+ark-ff = "0.3.0"
+ark-bls12-381 = "0.3.0"
+ark-serialize = "0.3.0"
+ark-ec = "0.3.0"
+ark-std = "0.3.0"
 clap = { version = "3.2.19", features = ["derive"] }
 
 [[bin]]
@@ -19,3 +26,10 @@ path = "client/main.rs"
 [[bin]]
 name = "example_app"
 path = "server/main.rs"
+
+[patch.crates-io]
+ark-ff = {git = "https://github.com/arkworks-rs/algebra"}
+ark-serialize = {git = "https://github.com/arkworks-rs/algebra"}
+ark-bls12-381 = {git = "https://github.com/arkworks-rs/curves"}
+ark-ec = {git = "https://github.com/arkworks-rs/algebra"}
+ark-std = {git = "https://github.com/arkworks-rs/utils"}
