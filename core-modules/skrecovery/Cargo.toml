@@ -1,5 +1,5 @@
 [package]
-name = "pki"
+name = "skrecovery"
 version = "0.1.0"
 edition = "2021"
 
@@ -24,8 +24,8 @@ name = "client"
 path = "client/main.rs"
 
 [[bin]]
-name = "example_app"
-path = "server/main.rs"
+name = "rust_app"
+path = "server/app.rs"
 
 [patch.crates-io]
 ark-ff = {git = "https://github.com/arkworks-rs/algebra"}
