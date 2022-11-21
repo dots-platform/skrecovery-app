@@ -2,14 +2,14 @@ use std::env;
 
 use dtrust::client::Client;
 use async_trait::async_trait;
-use rand::{thread_rng, RngCore};
+use rand::{RngCore};
 use rand_chacha::ChaCha20Rng;
 use rand::prelude::*;
 
 use ark_ff::UniformRand;
 use ark_ff::fields::Field;
-use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
-use ark_bls12_381::{Bls12_381, Fr};
+
+use ark_bls12_381::{Fr};
 pub trait SkConfig {
     type F: Field;
 }
@@ -25,7 +25,7 @@ impl SkConfig for MyConfig {
 pub trait SecretKeyRecoverable {
     // Encrypt the secret key?
     async fn upload_sk_and_pwd<Cfg: SkConfig>(&self, id: String, sk: String, pwd: String);
-    async fn recover_sk<Cfg: SkConfig>(&self, id: String, pwd_guess: String) -> String;
+    async fn upload_pwd_guess<Cfg: SkConfig>(&self, id: String, pwd_guess: String);
 }
 
 fn shard<F: Field>(n: F, num_shards: usize, rng: &mut impl RngCore) -> Vec<F>{
@@ -35,7 +35,7 @@ fn shard<F: Field>(n: F, num_shards: usize, rng: &mut impl RngCore) -> Vec<F>{
     // Find the inverse of sum
     let sum_inv = match F::inverse(&sum) {
         Some(s) => s,
-        None => panic!("some random numbers summed to zero L")
+        None => panic!("some random numbers summed to zero, go buy a lottery ticket")
     };
     // Multiple all n random numbers by sk * sum^-1
     let shards = random_vals.iter().map(|x| *x * sum_inv * n).collect::<Vec<F>>();
@@ -50,35 +50,37 @@ fn to_bytes<F: Field>(n: &F) -> Vec<u8> {
     v
 }
 
-fn from_string<F: Field>(s: String) -> F {
-    match F::deserialize_uncompressed(s.as_bytes()) {
-        Ok(f) => f,
-        Err(_) => {
-            eprintln!("error desrerializing field element");
-            panic!("");
-        },
-    }
-}
+// fn from_string<F: Field>(s: String) -> F {
+//     match F::deserialize_uncompressed(s.as_bytes()) {
+//         Ok(f) => f,
+//         Err(_) => {
+//             eprintln!("error desrerializing field element");
+//             panic!("");
+//         },
+//     }
+// }
 
 #[async_trait]
 impl SecretKeyRecoverable for Client
 {
-    async fn upload_sk_and_pwd<Cfg: SkConfig>(&self, id: String, sk_str: String, pwd_str: String) {
+    async fn upload_sk_and_pwd<Cfg: SkConfig>(&self, id: String, _sk_str: String, _pwd_str: String) {
         let rng = &mut ChaCha20Rng::from_entropy();
-        let sk_field = from_string::<Cfg::F>(sk_str);
+        let sk_field = <Cfg::F>::rand(rng); //from_string::<Cfg::F>(sk_str);
+        println!("sk_field: {}", sk_field);
         let sk_shards = shard::<Cfg::F>(sk_field, 2, rng);
         let sk_shards_bytes = sk_shards.iter().map(to_bytes::<Cfg::F>)
             .collect::<Vec<_>>();
         let sk_fname = id.to_owned() + "sk";
         // maybe this naming scheme isn't secure ...
         self.upload_blob(sk_fname, sk_shards_bytes).await;
-        let pwd_field = from_string::<Cfg::F>(pwd_str);
+        let pwd_field = <Cfg::F>::from_random_bytes("is this secure lmao".as_bytes()).unwrap();
+        println!("pwd_field: {}", pwd_field);
         let pwd_shards = shard::<Cfg::F>(pwd_field, 2, rng);
         let pwd_shards_bytes = pwd_shards.iter().map(to_bytes::<Cfg::F>).collect::<Vec<_>>();
         self.upload_blob(id + "pwd", pwd_shards_bytes).await;
     }
 
-    async fn recover_sk<Cfg: SkConfig>(&self, id: String, pwd_guess: String) -> String {
+    async fn upload_pwd_guess<Cfg: SkConfig>(&self, _id: String, _pwd_guess: String) {
         todo!();
     }
 }
@@ -90,7 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let node_addrs = ["http://127.0.0.1:50051", "http://127.0.0.1:50052"];
 
-    let cli_id = "user1";
+    let cli_id = "user1"; // TODO cli_id should be inputted.
     let mut client = Client::new(cli_id);
 
     let app_name = "rust_app";
@@ -148,13 +150,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     panic!("");
                 },
             };
-            println!("Recovering sk with pwd guess {}, for user {}", pwd_guess, id);
+            client.upload_pwd_guess::<MyConfig>(String::from(&id), String::from(&pwd_guess)).await;
 
-            let in_files = [String::from("user1.json")];
-            let out_files = [String::from("signature.json")];
+            println!("Recovering sk with pwd guess {}, for user {}", pwd_guess, id);
+            
+            let in_files = [String::from(id.to_owned() + "sk"),
+                String::from(id.to_owned() + "pwd"), 
+                String::from(id.to_owned() + "pwdguess")];
 
             client
-                .exec(app_name, "skrecovery", in_files.to_vec(), out_files.to_vec())
+                .exec(app_name, "skrecovery", in_files.to_vec(), Vec::new())
                 .await?;
             
         }
