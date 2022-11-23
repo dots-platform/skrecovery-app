@@ -30,6 +30,7 @@ tokio-serde = { version = "0.8.0", features = ["json"] }
 tokio-util = "0.7.4"
 mio = "0.8"
 tokio-core = "0.1"
+multi-party-ecdsa = { version = "0.8.1", git = "https://github.com/ZenGo-X/multi-party-ecdsa.git" }
 
 [[bin]]
 name = "client"
@@ -38,10 +39,6 @@ path = "client/main.rs"
 [[bin]]
 name = "rust_app"
 path = "server/app.rs"
-
-[dependencies.multi-party-ecdsa]
-git = "https://github.com/ZenGo-X/multi-party-ecdsa"
-branch = "feature/deprecate-rust-crypto"
 
 [profile.release]
 opt-level = 2
