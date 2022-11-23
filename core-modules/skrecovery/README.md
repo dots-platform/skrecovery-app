@@ -26,7 +26,7 @@ cargo run --bin rust_app
 
 3. 
 
-upload some sk's and pwds
+Upload some sk's and pwds
 
 ```jsx
 cargo run --bin client upload_sk_and_pwd my_id my_sk my_pwd
@@ -34,7 +34,7 @@ cargo run --bin client upload_sk_and_pwd my_id my_sk my_pwd
 
 4. 
 
-recover the sk with a password guess
+Recover the sk with a password guess
 ```jsx
 cargo run --bin client recover_sk my_id my_sk my_pwd
 ```

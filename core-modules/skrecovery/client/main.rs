@@ -110,7 +110,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let node_addrs = ["http://127.0.0.1:50051", "http://127.0.0.1:50052"];
 
-    let cli_id = "user1"; // TODO cli_id should be inputted.
+    let cli_id = "user1"; // TODO cli_id should be inputted? idrk what it means.
     let mut client = Client::new(cli_id);
 
     let app_name = "rust_app";

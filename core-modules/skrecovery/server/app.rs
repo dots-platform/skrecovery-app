@@ -12,24 +12,16 @@ use ark_ff::{Field, One};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_ff::UniformRand;
 
-// bruh i copy pasted this from the client we really need some library somewhere
-fn to_bytes<F: Field>(n: &F) -> Vec<u8> {
-    let mut v = Vec::new();
-    assert!(n.serialize_uncompressed(&mut v).is_ok());
-    v
-}
-
 fn main() -> io::Result<()> {
     let (rank, func_name, in_files, out_files, mut socks) = init_app()?;
 
-    println!("rank {} starting", rank);
-
+    println!("rank {} starting\nfunc_name: {}", rank, func_name);
     match &func_name[..] {
         "skrecovery" =>
         {
             // FOR TWO PARTY CASE: we write to socks[rank] and read from socks[1 - rank]
             // TODO: come up with a better protocol for this
-
+            println!("STARTING SKRECOVERY");
             assert_eq!(in_files.len(), 3);
             // TODO: where is a good place to bring in the configuration? 
             // I don't think the arguments to this function is a good idea. 
@@ -91,11 +83,13 @@ fn main() -> io::Result<()> {
             let elts_to_write = (hiding - beaver_a, (pwd_shard - pwd_guess_shard) - beaver_b);
             let mut v1 = Vec::new();
             assert!(elts_to_write.serialize_uncompressed(&mut v1).is_ok());
-            assert!(socks[rank as usize].write(&v1).is_ok());
+            socks[rank as usize].write(&v1)?;
 
             let mut buf1 = vec![0u8; 256];
-            assert!(socks[1 - rank as usize].read(&mut buf1).is_ok());
+            socks[1 - rank as usize].read(&mut buf1)?;
             let resp1: (F, F) = <(F, F)>::deserialize_uncompressed(buf1.as_slice()).unwrap();
+
+            println!("COMMUNICATION FOR ROUND 1 DONE");
 
             let x_sub_a = resp1.0 + elts_to_write.0;
             let y_sub_b = resp1.1 + elts_to_write.1;
@@ -112,23 +106,22 @@ fn main() -> io::Result<()> {
 
             let mut v2 = Vec::new();
             assert!(z.serialize_uncompressed(&mut v2).is_ok());
-            assert!(socks[rank as usize].write(&v2).is_ok());
+            socks[rank as usize].write(&v2)?;
 
             let mut buf2 = vec![0u8; 256];
-            assert!(socks[1 - rank as usize].read(&mut buf2).is_ok());
+            socks[1 - rank as usize].read(&mut buf2)?;
             let other_z = F::deserialize_uncompressed(buf2.as_slice()).unwrap();
 
             let field_to_write: F = sk_shard * (z + other_z + F::one());
 
-            println!("GONNA TRY TO SERIALIZE {}", field_to_write);
+            println!("FINISHED COMMUNICATION ROUND 2, SERIALIZING: {}", field_to_write);
             
             let mut result = Vec::new();
             assert!(field_to_write.serialize_uncompressed(&mut result).is_ok());
 
             assert_eq!(out_files.len(), 1);
             let mut out_file = &out_files[0];
-            assert!(out_file.write_all(&mut result).is_ok());
-            assert!(out_file.flush().is_ok());
+            out_file.write(&result)?;
 
             Ok(())
         }
