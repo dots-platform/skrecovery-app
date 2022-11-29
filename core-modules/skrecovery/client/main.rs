@@ -88,6 +88,7 @@ impl SecretKeyRecoverable for Client
         let rng = &mut ChaCha20Rng::from_entropy();
         let guess_shards = shard::<Cfg::F>(pwd_guess, 2, rng);
         let guess_shards_bytes = guess_shards.iter().map(to_bytes::<Cfg::F>).collect::<Vec<_>>();
+        println!("LENS: {:?} {:?}", guess_shards_bytes[0], guess_shards_bytes[1]);
         self.upload_blob(id + "guess.txt", guess_shards_bytes).await;
 
     }

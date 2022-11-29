@@ -8,36 +8,33 @@ use rand::prelude::*;
 // TODO: move this field choice into a config somewhere. Also, put the number of nodes in this config
 // Also the file names we use for client/server communication. 
 use ark_bls12_381::Fr as F;
-use ark_ff::{Field, One};
+use ark_ff::{One};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_ff::UniformRand;
 
+const F_SIZE: usize = 32;
 fn main() -> io::Result<()> {
     let (rank, func_name, in_files, out_files, mut socks) = init_app()?;
 
-    println!("rank {} starting\nfunc_name: {}", rank, func_name);
+    println!("rank {} starting\nsocks len: {}", rank, socks.len());
     match &func_name[..] {
         "skrecovery" =>
         {
-            // FOR TWO PARTY CASE: we write to socks[rank] and read from socks[1 - rank]
-            // TODO: come up with a better protocol for this
-            println!("STARTING SKRECOVERY");
             assert_eq!(in_files.len(), 3);
             // TODO: where is a good place to bring in the configuration? 
             // I don't think the arguments to this function is a good idea. 
 
             let field_elts = in_files.iter().map(|mut f| {
-                let mut buf = vec![0u8, 64];
-                match f.read_to_end(&mut buf) {
-                    Ok(_) => {
-                        F::deserialize_uncompressed(buf.as_slice()).unwrap()
-                    }
-                    Err(_) => {
-                        eprintln!("Error while reading a serialized field element");
-                        panic!();
-                    }
+                // println!("file: {:?}", f);
+                let mut buf = vec![];
+                if f.read_to_end(&mut buf).is_err() {
+                    panic!("ouch");
                 }
+                // println!("buf: {:?}", buf);
+                F::deserialize_uncompressed(buf.as_slice()).unwrap()
+
             }).collect::<Vec<F>>();
+
 
             let sk_shard = field_elts[0];
             let pwd_shard = field_elts[1];
@@ -79,16 +76,16 @@ fn main() -> io::Result<()> {
 
             // ROUND 1: multiplication
             // Send R - a1, and (PW - PWG) - b1
-
             let elts_to_write = (hiding - beaver_a, (pwd_shard - pwd_guess_shard) - beaver_b);
             let mut v1 = Vec::new();
             assert!(elts_to_write.serialize_uncompressed(&mut v1).is_ok());
-            socks[rank as usize].write(&v1)?;
+            socks[1 - rank as usize].write_all(&v1)?;
 
-            let mut buf1 = vec![0u8; 256];
+            let mut buf1 = [0u8; F_SIZE * 2];
             socks[1 - rank as usize].read(&mut buf1)?;
-            let resp1: (F, F) = <(F, F)>::deserialize_uncompressed(buf1.as_slice()).unwrap();
-
+            let resp1 = <(F, F)>::deserialize_uncompressed(buf1.as_slice()).unwrap();
+            
+            println!("RESP1: {:?}", resp1);
             println!("COMMUNICATION FOR ROUND 1 DONE");
 
             let x_sub_a = resp1.0 + elts_to_write.0;
@@ -106,11 +103,13 @@ fn main() -> io::Result<()> {
 
             let mut v2 = Vec::new();
             assert!(z.serialize_uncompressed(&mut v2).is_ok());
-            socks[rank as usize].write(&v2)?;
+            println!("ROUND 2 SENDING {:?}", z);
+            socks[1 - rank as usize].write(&v2)?;
 
-            let mut buf2 = vec![0u8; 256];
+            let mut buf2 = [0u8; F_SIZE];
             socks[1 - rank as usize].read(&mut buf2)?;
             let other_z = F::deserialize_uncompressed(buf2.as_slice()).unwrap();
+            println!("ROUND 2 RECEIVING {:?}", other_z);
 
             let field_to_write: F = sk_shard * (z + other_z + F::one());
 
