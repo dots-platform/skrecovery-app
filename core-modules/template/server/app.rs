@@ -7,6 +7,9 @@ fn main() -> io::Result<()> {
 
     println!("rank {:?}", rank);
     println!("func name {:?}", func_name);
+    println!("socks0: {:?}", socks[0]);
+    println!("socks1: {:?}", socks[1]);
+    println!("socks2: {:?}", socks[2]);
 
     // testing network connections
     if rank == 0 {
@@ -16,7 +19,7 @@ fn main() -> io::Result<()> {
         println!("{}", String::from_utf8_lossy(&buffer));
         socks[2].read(&mut buffer)?;
         
-        println!("{}", String::from_utf8_lossy(&buffer));
+        println!("READ FRIN SOCKS 2 ∫{}", String::from_utf8_lossy(&buffer));
     } else if rank == 1 {
         let mut buffer = [0; 11];
         socks[0].read(&mut buffer)?;
