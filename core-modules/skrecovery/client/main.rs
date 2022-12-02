@@ -1,4 +1,5 @@
 use std::env;
+use std::str::FromStr;
 
 use dtrust::client::Client;
 use async_trait::async_trait;
@@ -6,28 +7,17 @@ use rand::{RngCore};
 use rand_chacha::ChaCha20Rng;
 use rand::prelude::*;
 
-use ark_ff::{UniformRand, Zero};
+use ark_ff::{Zero};
 use ark_ff::fields::Field;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
-use ark_bls12_381::{Fr};
-pub trait SkConfig {
-    type F: Field;
-}
-
-pub struct MyConfig {
-    num: u8
-}
-
-impl SkConfig for MyConfig {
-    type F = Fr;
-}
+use ark_bls12_381::{Fr as F};
 #[async_trait]
 pub trait SecretKeyRecoverable {
     // Encrypt the secret key?
-    async fn upload_sk_and_pwd<Cfg: SkConfig>(&self, id: String, sk: String, pwd: String);
-    async fn upload_pwd_guess<Cfg: SkConfig>(&self, id: String, pwd_guess: Cfg::F);
-    async fn aggregate_sk<Cfg: SkConfig>(&self, id: String) -> Vec<u8>;
+    async fn upload_sk_and_pwd(&self, id: String, sk: String, pwd: String);
+    async fn upload_pwd_guess(&self, id: String, pwd_guess: F);
+    async fn aggregate_sk(&self, id: String) -> Vec<u8>;
 }
 
 fn shard<F: Field>(n: F, num_shards: usize, rng: &mut impl RngCore) -> Vec<F>{
@@ -67,36 +57,36 @@ impl SecretKeyRecoverable for Client
 {
 
     // TODO I think we have to use 
-    async fn upload_sk_and_pwd<Cfg: SkConfig>(&self, id: String, _sk_str: String, pwd: String) {
+    async fn upload_sk_and_pwd(&self, id: String, sk: String, pwd: String) {
         let rng = &mut ChaCha20Rng::from_entropy();
-        let sk_field = <Cfg::F>::rand(rng); //from_string::<Cfg::F>(sk_str);
+        let sk_field = F::from_str(&sk).unwrap();
         println!("sk_field: {}", sk_field);
-        let sk_shards = shard::<Cfg::F>(sk_field, 2, rng);
-        let sk_shards_bytes = sk_shards.iter().map(to_bytes::<Cfg::F>)
+        let sk_shards = shard::<F>(sk_field, 2, rng);
+        let sk_shards_bytes = sk_shards.iter().map(to_bytes::<F>)
             .collect::<Vec<_>>();
         let sk_fname = id.to_owned() + "sk.txt";
         // maybe this naming scheme isn't secure ...
         self.upload_blob(sk_fname, sk_shards_bytes).await;
-        let pwd_field = <Cfg::F>::from_random_bytes(pwd.as_bytes()).unwrap();
+        let pwd_field = <F>::from_random_bytes(pwd.as_bytes()).unwrap();
         println!("pwd_field: {}", pwd_field);
-        let pwd_shards = shard::<Cfg::F>(pwd_field, 2, rng);
-        let pwd_shards_bytes = pwd_shards.iter().map(to_bytes::<Cfg::F>).collect::<Vec<_>>();
+        let pwd_shards = shard::<F>(pwd_field, 2, rng);
+        let pwd_shards_bytes = pwd_shards.iter().map(to_bytes::<F>).collect::<Vec<_>>();
         self.upload_blob(id + "pwd.txt", pwd_shards_bytes).await;
     }
 
-    async fn upload_pwd_guess<Cfg: SkConfig>(&self, id: String, pwd_guess: Cfg::F) {
+    async fn upload_pwd_guess(&self, id: String, pwd_guess: F) {
         let rng = &mut ChaCha20Rng::from_entropy();
-        let guess_shards = shard::<Cfg::F>(pwd_guess, 2, rng);
-        let guess_shards_bytes = guess_shards.iter().map(to_bytes::<Cfg::F>).collect::<Vec<_>>();
+        let guess_shards = shard::<F>(pwd_guess, 2, rng);
+        let guess_shards_bytes = guess_shards.iter().map(to_bytes::<F>).collect::<Vec<_>>();
         println!("LENS: {:?} {:?}", guess_shards_bytes[0], guess_shards_bytes[1]);
         self.upload_blob(id + "guess.txt", guess_shards_bytes).await;
 
     }
-    async fn aggregate_sk<Cfg: SkConfig>(&self, id: String) -> Vec<u8> {
+    async fn aggregate_sk(&self, id: String) -> Vec<u8> {
         let sk_shard_bytes = self.retrieve_blob(id + "recovered_sk.txt").await;
         let f = sk_shard_bytes.iter()
-            .map(|v| Cfg::F::deserialize_uncompressed(v.as_slice()).unwrap())
-            .fold(Cfg::F::zero(), |x, y| x + y);
+            .map(|v| F::deserialize_uncompressed(v.as_slice()).unwrap())
+            .fold(F::zero(), |x, y| x + y);
 
         let mut buf = Vec::new();
         assert!(f.serialize_uncompressed(&mut buf).is_ok());
@@ -148,7 +138,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 },
             };
             println!("Uploading sk {}, pwd {} for user {}", sk, pwd, id);
-            client.upload_sk_and_pwd::<MyConfig>(String::from(id), sk, pwd).await;
+            client.upload_sk_and_pwd(String::from(id), sk, pwd).await;
         }
         "recover_sk" => {
             let id: String = match args[2].parse() {
@@ -162,7 +152,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             let pwd_guess = match args[3].parse::<String>() {
                 Ok(s) => {
-                    <MyConfig as SkConfig>::F::from_random_bytes(s.as_bytes()).unwrap()
+                    F::from_random_bytes(s.as_bytes()).unwrap()
                 },
                 Err(_) => {
                     eprintln!("error: pwd guess not a string");
@@ -170,7 +160,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 },
             };
             println!("Uploading guess ...");
-            client.upload_pwd_guess::<MyConfig>(String::from(&id), pwd_guess).await;
+            client.upload_pwd_guess(String::from(&id), pwd_guess).await;
             println!("Guess uploaded");
 
             println!("Recovering sk with pwd guess {}, for user {}", pwd_guess, id);
@@ -186,9 +176,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .await?;
 
             println!("Aggregating SK on client");
-            let s = client.aggregate_sk::<MyConfig>(id).await;
+            let s = client.aggregate_sk(id).await;
 
-            let f = <MyConfig as SkConfig>::F::deserialize_uncompressed(s.as_slice()).unwrap(); 
+            let f = F::deserialize_uncompressed(s.as_slice()).unwrap(); 
             
             println!("Recovered sk: {}", f);
         }

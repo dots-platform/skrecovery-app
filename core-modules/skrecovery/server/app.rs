@@ -8,7 +8,7 @@ use rand::prelude::*;
 // TODO: move this field choice into a config somewhere. Also, put the number of nodes in this config
 // Also the file names we use for client/server communication. 
 use ark_bls12_381::Fr as F;
-use ark_ff::{One};
+use ark_ff::{One, PrimeField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_ff::UniformRand;
 
@@ -16,7 +16,9 @@ const F_SIZE: usize = 32;
 fn main() -> io::Result<()> {
     let (rank, func_name, in_files, out_files, mut socks) = init_app()?;
 
-    println!("rank {} starting\nsocks len: {}", rank, socks.len());
+    println!("rank {} starting", rank);
+
+
     match &func_name[..] {
         "skrecovery" =>
         {
@@ -25,12 +27,10 @@ fn main() -> io::Result<()> {
             // I don't think the arguments to this function is a good idea. 
 
             let field_elts = in_files.iter().map(|mut f| {
-                // println!("file: {:?}", f);
                 let mut buf = vec![];
                 if f.read_to_end(&mut buf).is_err() {
-                    panic!("ouch");
+                    panic!("Error reading file");
                 }
-                // println!("buf: {:?}", buf);
                 F::deserialize_uncompressed(buf.as_slice()).unwrap()
 
             }).collect::<Vec<F>>();
@@ -84,9 +84,6 @@ fn main() -> io::Result<()> {
             let mut buf1 = [0u8; F_SIZE * 2];
             socks[1 - rank as usize].read(&mut buf1)?;
             let resp1 = <(F, F)>::deserialize_uncompressed(buf1.as_slice()).unwrap();
-            
-            println!("RESP1: {:?}", resp1);
-            println!("COMMUNICATION FOR ROUND 1 DONE");
 
             let x_sub_a = resp1.0 + elts_to_write.0;
             let y_sub_b = resp1.1 + elts_to_write.1;
@@ -103,24 +100,20 @@ fn main() -> io::Result<()> {
 
             let mut v2 = Vec::new();
             assert!(z.serialize_uncompressed(&mut v2).is_ok());
-            println!("ROUND 2 SENDING {:?}", z);
             socks[1 - rank as usize].write(&v2)?;
 
             let mut buf2 = [0u8; F_SIZE];
             socks[1 - rank as usize].read(&mut buf2)?;
             let other_z = F::deserialize_uncompressed(buf2.as_slice()).unwrap();
-            println!("ROUND 2 RECEIVING {:?}", other_z);
 
             let field_to_write: F = sk_shard * (z + other_z + F::one());
 
-            println!("FINISHED COMMUNICATION ROUND 2, SERIALIZING: {}", field_to_write);
-            
             let mut result = Vec::new();
             assert!(field_to_write.serialize_uncompressed(&mut result).is_ok());
 
             assert_eq!(out_files.len(), 1);
             let mut out_file = &out_files[0];
-            out_file.write(&result)?;
+            out_file.write_all(&result)?;
 
             Ok(())
         }
