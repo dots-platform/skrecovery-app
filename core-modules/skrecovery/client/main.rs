@@ -42,16 +42,6 @@ fn to_bytes<F: Field>(n: &F) -> Vec<u8> {
     v
 }
 
-// fn from_string<F: Field>(s: String) -> F {
-//     match F::deserialize_uncompressed(s.as_bytes()) {
-//         Ok(f) => f,
-//         Err(_) => {
-//             eprintln!("error deserializing field element");
-//             panic!("");
-//         },
-//     }
-// }
-
 #[async_trait]
 impl SecretKeyRecoverable for Client
 {
@@ -62,29 +52,30 @@ impl SecretKeyRecoverable for Client
         let sk_field = F::from_str(&sk).unwrap();
         println!("sk_field: {}", sk_field);
         let sk_shards = shard::<F>(sk_field, 2, rng);
-        let sk_shards_bytes = sk_shards.iter().map(to_bytes::<F>)
+        let mut sk_shards_bytes = sk_shards.iter().map(to_bytes::<F>)
             .collect::<Vec<_>>();
-        let sk_fname = id.to_owned() + "sk.txt";
-        // maybe this naming scheme isn't secure ...
-        self.upload_blob(sk_fname, sk_shards_bytes).await;
+        sk_shards_bytes.push(Vec::new());
+        self.upload_blob(id.to_owned() + "sk.txt", sk_shards_bytes).await;
+
         let pwd_field = <F>::from_random_bytes(pwd.as_bytes()).unwrap();
         println!("pwd_field: {}", pwd_field);
         let pwd_shards = shard::<F>(pwd_field, 2, rng);
-        let pwd_shards_bytes = pwd_shards.iter().map(to_bytes::<F>).collect::<Vec<_>>();
+        let mut pwd_shards_bytes = pwd_shards.iter().map(to_bytes::<F>).collect::<Vec<_>>();
+        pwd_shards_bytes.push(Vec::new());
         self.upload_blob(id + "pwd.txt", pwd_shards_bytes).await;
     }
 
     async fn upload_pwd_guess(&self, id: String, pwd_guess: F) {
         let rng = &mut ChaCha20Rng::from_entropy();
         let guess_shards = shard::<F>(pwd_guess, 2, rng);
-        let guess_shards_bytes = guess_shards.iter().map(to_bytes::<F>).collect::<Vec<_>>();
-        println!("LENS: {:?} {:?}", guess_shards_bytes[0], guess_shards_bytes[1]);
+        let mut guess_shards_bytes = guess_shards.iter().map(to_bytes::<F>).collect::<Vec<_>>();
+        guess_shards_bytes.push(Vec::new());
         self.upload_blob(id + "guess.txt", guess_shards_bytes).await;
 
     }
     async fn aggregate_sk(&self, id: String) -> Vec<u8> {
         let sk_shard_bytes = self.retrieve_blob(id + "recovered_sk.txt").await;
-        let f = sk_shard_bytes.iter()
+        let f = sk_shard_bytes[..2].iter()
             .map(|v| F::deserialize_uncompressed(v.as_slice()).unwrap())
             .fold(F::zero(), |x, y| x + y);
 
@@ -99,9 +90,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     let cmd = &args[1];
 
-    let node_addrs = ["http://127.0.0.1:50051", "http://127.0.0.1:50052"];
+    let node_addrs = ["http://127.0.0.1:50051", "http://127.0.0.1:50052", "http://127.0.0.1:50053"];
 
-    let cli_id = "user1"; // TODO cli_id should be inputted? idrk what it means.
+    let cli_id = "user1";
     let mut client = Client::new(cli_id);
 
     let app_name = "rust_app";

@@ -8,11 +8,44 @@ use rand::prelude::*;
 // TODO: move this field choice into a config somewhere. Also, put the number of nodes in this config
 // Also the file names we use for client/server communication. 
 use ark_bls12_381::Fr as F;
-use ark_ff::{One, PrimeField};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_ff::{One, Field};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_ff::UniformRand;
+use std::net::TcpStream;
 
-const F_SIZE: usize = 32;
+const F_SIZE: usize = 32; // ceil(381 * 12 / 8)
+const BEAVER_SERVER: usize = 2;
+
+fn read_beaver_elt(socks: &mut Vec<TcpStream>) -> Result<F, SerializationError> {
+    let mut buf = [0u8; F_SIZE];
+    socks[2].read(&mut buf)?;
+    F::deserialize_uncompressed(buf.as_slice())
+}
+
+fn shard<F: Field>(n: F, num_shards: usize, rng: &mut impl RngCore) -> Vec<F>{
+    // Initialize random number array, sum
+    let random_vals = (0..num_shards).map(|_| F::rand(rng)).collect::<Vec<F>>();
+    let sum = random_vals.iter().sum();
+    // Find the inverse of sum
+    let sum_inv = match F::inverse(&sum) {
+        Some(s) => s,
+        None => panic!("some random numbers summed to zero, go buy a lottery ticket")
+    };
+    // Multiple all n random numbers by sk * sum^-1
+    let shards = random_vals.iter().map(|x| *x * sum_inv * n).collect::<Vec<F>>();
+    // Return shards
+    shards
+}
+
+fn shard_to_bytes<F: Field>(n: F, num_shards: usize, rng: &mut impl RngCore) -> Vec<Vec<u8>> {
+    let field_elts = shard::<F>(n, num_shards, rng);
+    field_elts.iter().map(|f| {
+        let mut b = Vec::new();
+        assert!(f.serialize_uncompressed(&mut b).is_ok());
+        b
+    }).collect::<Vec<_>>()
+}
+
 fn main() -> io::Result<()> {
     let (rank, func_name, in_files, out_files, mut socks) = init_app()?;
 
@@ -22,9 +55,27 @@ fn main() -> io::Result<()> {
     match &func_name[..] {
         "skrecovery" =>
         {
+            if rank == BEAVER_SERVER as u8 {
+                let rng = &mut ChaCha20Rng::from_entropy();
+                let a = F::rand(rng);
+                let b = F::rand(rng);
+                let c = a * b;
+
+                let a_shards = shard_to_bytes::<F>(a, 2, rng);
+                let b_shards = shard_to_bytes::<F>(b, 2, rng);
+                let c_shards = shard_to_bytes::<F>(c, 2, rng);
+
+                for i in 0..socks.len() {
+                    if i != BEAVER_SERVER {
+                        // NOTE: only works if BEAVER_SERVER is the LAST NODE!
+                        socks[i].write(&a_shards[i])?;
+                        socks[i].write(&b_shards[i])?;
+                        socks[i].write(&c_shards[i])?;
+                    }
+                }
+
+            }
             assert_eq!(in_files.len(), 3);
-            // TODO: where is a good place to bring in the configuration? 
-            // I don't think the arguments to this function is a good idea. 
 
             let field_elts = in_files.iter().map(|mut f| {
                 let mut buf = vec![];
@@ -40,35 +91,10 @@ fn main() -> io::Result<()> {
             let pwd_shard = field_elts[1];
             let pwd_guess_shard = field_elts[2];
 
-            // TODO first turn this into a config file thing, then turn make an (auditable) beaver triple generating server? 
-            // beaver triple: (3 + 4) * (5 + 7) = (81 + 3)
-            // chosen EXTREMELY arbitrarily dont worry about it
-            let beaver_a = match rank {
-                0 => F::from(3),
-                1 => F::from(4),
-                _ => {
-                    eprintln!("Too many servers");
-                    panic!();
-                }
-            };
-
-            let beaver_b = match rank {
-                0 => F::from(5),
-                1 => F::from(7),
-                _ => {
-                    eprintln!("Too many servers");
-                    panic!();
-                }
-            };
-
-            let beaver_c = match rank {
-                0 => F::from(81),
-                1 => F::from(3),
-                _ => {
-                    eprintln!("Too many servers");
-                    panic!();
-                }
-            };
+            // TODO: write them all together
+            let beaver_a = read_beaver_elt(&mut socks).unwrap();
+            let beaver_b = read_beaver_elt(&mut socks).unwrap();
+            let beaver_c = read_beaver_elt(&mut socks).unwrap();
 
             let rng = &mut ChaCha20Rng::from_entropy();
 

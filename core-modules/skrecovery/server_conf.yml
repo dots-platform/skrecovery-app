@@ -5,7 +5,10 @@ nodes:
     ports: [51000]      # ports for connection between servers
   node2:
     addr: "127.0.0.1:50052"
-    ports: [52000]                    # if only one port is specified, the platform will infer the remaining ports. In this case, the ports for 
+    ports: [52000]  
+  node3:
+    addr: "127.0.0.1:50053"
+    ports: [53000]                 
 
 apps:
   rust_app:
