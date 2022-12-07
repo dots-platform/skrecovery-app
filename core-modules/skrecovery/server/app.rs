@@ -61,9 +61,10 @@ fn main() -> io::Result<()> {
                 let b = F::rand(rng);
                 let c = a * b;
 
-                let a_shards = shard_to_bytes::<F>(a, 2, rng);
-                let b_shards = shard_to_bytes::<F>(b, 2, rng);
-                let c_shards = shard_to_bytes::<F>(c, 2, rng);
+                let NUM_PARTIES = socks.len() - 1;
+                let a_shards = shard_to_bytes::<F>(a, NUM_PARTIES, rng);
+                let b_shards = shard_to_bytes::<F>(b, NUM_PARTIES, rng);
+                let c_shards = shard_to_bytes::<F>(c, NUM_PARTIES, rng);
 
                 for i in 0..socks.len() {
                     if i != BEAVER_SERVER {
@@ -106,34 +107,62 @@ fn main() -> io::Result<()> {
                 let elts_to_write = (hiding - beaver_a, (pwd_shard - pwd_guess_shard) - beaver_b);
                 let mut v1 = Vec::new();
                 assert!(elts_to_write.serialize_uncompressed(&mut v1).is_ok());
-                socks[1 - rank as usize].write_all(&v1)?;
+                //broadcast to all other nodes
+                for i in 0..socks.len() {
+                    if i != (rank as usize) && i != BEAVER_SERVER {
+                        socks[i as usize].write_all(&v1)?;
+                    }
+                }
     
                 let mut buf1 = [0u8; F_SIZE * 2];
-                socks[1 - rank as usize].read(&mut buf1)?;
-                let resp1 = <(F, F)>::deserialize_uncompressed(buf1.as_slice()).unwrap();
+                let mut x_sub_a = elts_to_write.0;
+                let mut y_sub_b = elts_to_write.1;
     
-                let x_sub_a = resp1.0 + elts_to_write.0;
-                let y_sub_b = resp1.1 + elts_to_write.1;
-    
+                for i in 0..socks.len() {
+                    if i != (rank as usize) && i != BEAVER_SERVER {
+                        socks[i as usize].read(&mut buf1)?;
+                        let resp = <(F, F)>::deserialize_uncompressed(buf1.as_slice()).unwrap();
+                        x_sub_a += resp.0;
+                        y_sub_b += resp.1;
+                    }
+                }
+
+                
                 // here, 0 is the special node who adds a little extra term, but it doesnt have to be like that. 
-                let z = match rank {
-                    0 => beaver_c + x_sub_a * beaver_b + y_sub_b * beaver_a,
-                    1 => beaver_c + x_sub_a * beaver_b + y_sub_b * beaver_a + x_sub_a * y_sub_b,
-                    _ => panic!("oops")
-                };
+                let mut z = beaver_c + x_sub_a * beaver_b;
+                if rank == 0 {
+                    z += x_sub_a * y_sub_b;
+                }
+
+                //let NUM_PARTIES = (socks.len() - 2) as u8;
+                // let z = match rank {
+                //     0 => beaver_c + x_sub_a * beaver_b + y_sub_b * beaver_a + x_sub_a * y_sub_b,
+                //     1..=NUM_PARTIES => beaver_c + x_sub_a * beaver_b,
+                //     _ => panic!("oops")
+                // };
     
                 // ROUND 2: exchange z's
                 // TODO make rounds more generic? it's basically just sending something serializable and deserializing it. 
     
                 let mut v2 = Vec::new();
+                let mut combined_z = z;
                 assert!(z.serialize_uncompressed(&mut v2).is_ok());
-                socks[1 - rank as usize].write(&v2)?;
+                for i in 0..socks.len() {
+                    if i != (rank as usize) && i != BEAVER_SERVER {
+                        socks[i as usize].write_all(&v2)?;
+                    }
+                }
     
                 let mut buf2 = [0u8; F_SIZE];
-                socks[1 - rank as usize].read(&mut buf2)?;
-                let other_z = F::deserialize_uncompressed(buf2.as_slice()).unwrap();
+                for i in 0..socks.len() {
+                    if i != (rank as usize) && i != BEAVER_SERVER {
+                        socks[i as usize].read(&mut buf2)?;
+                        let z_share = F::deserialize_uncompressed(buf2.as_slice()).unwrap();
+                        combined_z += z_share;
+                    }
+                }
     
-                let field_to_write: F = sk_shard * (z + other_z + F::one());
+                let field_to_write: F = sk_shard * (combined_z + F::one());
     
                 let mut result = Vec::new();
                 assert!(field_to_write.serialize_uncompressed(&mut result).is_ok());
