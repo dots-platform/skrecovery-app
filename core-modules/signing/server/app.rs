@@ -110,6 +110,7 @@ fn broadcast_keygen(
         let sender = party_index as usize;
         if recipient != sender {
             // Send message to recipient
+            println!("MY RANK: {:?}\nI WRITE TO: {:?}", party_index - 1, recipient - 1);
             socks[recipient - 1].write(serialized.as_bytes())?;
         }
     }
@@ -432,6 +433,8 @@ fn main() -> io::Result<()> {
     param_file.read(&mut params_buf)?;
     let params_str = String::from_utf8_lossy(&params_buf);
     let params: Value = serde_json::from_str(params_str.trim_matches(char::from(0)))?;
+
+    println!("SOCKLEN {}", socks.len());
 
     // Keygen
     if func_name == "keygen" {
