@@ -21,8 +21,7 @@ The user uploads password guess shards independently to each server. The servers
 The specific MPC that the server's calculate is outlined below. The sharding scheme shown is additive.
 * If the password guess is correct, the circuit evaluates to the secret key.
 * If the password guess is incorrect, the circuit evaluates to a random value.
-
-![mpc](assets/README-dc0c0.png)
+![mpc](assets/README-7e7ab.png)
 
 ## Threat Model
 Under the assumption that Alice shards her secret key into `N` shares:
