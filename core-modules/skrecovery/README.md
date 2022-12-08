@@ -12,11 +12,10 @@ Our protocol includes two phases: key registraion and key recovery. The examples
 
 ### Key Registration
 The user uploads secret key shards and password shards independently to each server.
-![registration](assets/README-4ec9a.png)
-
+![registration](assets/README-b0262.png)
 ### Key Recovery
 The user uploads password guess shards independently to each server. The servers communicate to perform an MPC and verify if the password guess was correct. A separate beaver triple server provides beaver triples to the servers that are needed for the MPC circuit.
-![recovery](assets/README-03eb1.png)
+![recovery](assets/README-c3945.png)
 
 ### MPC
 The specific MPC that the server's calculate is outlined below. The sharding scheme shown is additive.
