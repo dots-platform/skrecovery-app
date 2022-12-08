@@ -61,10 +61,10 @@ fn main() -> io::Result<()> {
                 let b = F::rand(rng);
                 let c = a * b;
 
-                let NUM_PARTIES = socks.len() - 1;
-                let a_shards = shard_to_bytes::<F>(a, NUM_PARTIES, rng);
-                let b_shards = shard_to_bytes::<F>(b, NUM_PARTIES, rng);
-                let c_shards = shard_to_bytes::<F>(c, NUM_PARTIES, rng);
+                let num_parties = socks.len() - 1;
+                let a_shards = shard_to_bytes::<F>(a, num_parties, rng);
+                let b_shards = shard_to_bytes::<F>(b, num_parties, rng);
+                let c_shards = shard_to_bytes::<F>(c, num_parties, rng);
 
                 for i in 0..socks.len() {
                     if i != BEAVER_SERVER {
@@ -117,7 +117,7 @@ fn main() -> io::Result<()> {
                 let mut buf1 = [0u8; F_SIZE * 2];
                 let mut x_sub_a = elts_to_write.0;
                 let mut y_sub_b = elts_to_write.1;
-    
+
                 for i in 0..socks.len() {
                     if i != (rank as usize) && i != BEAVER_SERVER {
                         socks[i as usize].read(&mut buf1)?;
@@ -126,20 +126,16 @@ fn main() -> io::Result<()> {
                         y_sub_b += resp.1;
                     }
                 }
-
-                
+    
                 // here, 0 is the special node who adds a little extra term, but it doesnt have to be like that. 
-                let mut z = beaver_c + x_sub_a * beaver_b;
+                let z;
                 if rank == 0 {
-                    z += x_sub_a * y_sub_b;
+                    z = beaver_c + x_sub_a * beaver_b + y_sub_b * beaver_a + x_sub_a * y_sub_b;
+                } else if rank > (socks.len() as u8) - 1 {
+                    panic!("oops");
+                } else {
+                    z = beaver_c + x_sub_a * beaver_b + y_sub_b * beaver_a
                 }
-
-                //let NUM_PARTIES = (socks.len() - 2) as u8;
-                // let z = match rank {
-                //     0 => beaver_c + x_sub_a * beaver_b + y_sub_b * beaver_a + x_sub_a * y_sub_b,
-                //     1..=NUM_PARTIES => beaver_c + x_sub_a * beaver_b,
-                //     _ => panic!("oops")
-                // };
     
                 // ROUND 2: exchange z's
                 // TODO make rounds more generic? it's basically just sending something serializable and deserializing it. 
@@ -152,7 +148,7 @@ fn main() -> io::Result<()> {
                         socks[i as usize].write_all(&v2)?;
                     }
                 }
-    
+
                 let mut buf2 = [0u8; F_SIZE];
                 for i in 0..socks.len() {
                     if i != (rank as usize) && i != BEAVER_SERVER {
@@ -161,7 +157,7 @@ fn main() -> io::Result<()> {
                         combined_z += z_share;
                     }
                 }
-    
+
                 let field_to_write: F = sk_shard * (combined_z + F::one());
     
                 let mut result = Vec::new();
