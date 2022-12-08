@@ -90,7 +90,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     let cmd = &args[1];
 
-    let node_addrs = ["http://127.0.0.1:50051", "http://127.0.0.1:50052", "http://127.0.0.1:50053"];
+    let node_addrs = ["http://127.0.0.1:50051", "http://127.0.0.1:50052", "http://127.0.0.1:50053"]; // add to this list when there are more servers, TODO: is there better way to do this?
 
     let cli_id = "user1";
     let mut client = Client::new(cli_id);
