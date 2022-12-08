@@ -28,8 +28,3 @@ name = "rust_app"
 path = "server/app.rs"
 
 [patch.crates-io]
-ark-ff = {git = "https://github.com/arkworks-rs/algebra"}
-ark-serialize = {git = "https://github.com/arkworks-rs/algebra"}
-ark-bls12-381 = {git = "https://github.com/arkworks-rs/curves"}
-ark-ec = {git = "https://github.com/arkworks-rs/algebra"}
-ark-std = {git = "https://github.com/arkworks-rs/utils"}

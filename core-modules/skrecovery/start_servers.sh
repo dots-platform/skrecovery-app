@@ -7,6 +7,6 @@ cd ..
 for i in $(seq 1 $node_count)
 do
     echo "Waking up node $i out of $node_count"
-    ./platform/init_server --node_id node$i --config ./core-modules/skrecovery/server_conf.yml &
+    python3 platform/server_grpc/init_server.py --node_id node$i --config ./core-modules/skrecovery/server_conf.yml &
     sleep 3
 done
