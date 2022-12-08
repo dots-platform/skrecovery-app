@@ -23,6 +23,10 @@ The specific MPC that the server's calculate is outlined below. The sharding sch
 * If the password guess is incorrect, the circuit evaluates to a random value.
 ![mpc](assets/README-7e7ab.png)
 
+## Module Design
+We use [arkworks](https://github.com/arkworks-rs/algebra) for the finite-field arithmetic used in the MPC. Since the MPC circuit itself is quite simple, we chose to compute the circuit discretely rather than relying on a separate MPC library such as MP-SPDZ. We chose arkworks because members of our group already had prior experience with the library and we knew its capabilities would be sufficient for our project.
+For our client-server model, we bootstrap off the initial template provided in `core-modules/pki`.
+
 ## Threat Model
 Under the assumption that Alice shards her secret key into `N` shares:
 * Servers are semi-honest: compromised servers will still faithfully execute the protocol.
@@ -143,5 +147,6 @@ Recovered sk: Fp256 "(258D8AA38788B7F9FDDEA5AA9C0EFAE43460422AA5DEFEAFDE9A942A77
 
 # Future work
 * Evaluate performance as the number of participating servers / shards increases.
+* Add signatures to all messages between client/server and server/server. This would improve our threat model to protection against malicious attackers rather than semi-honest ones.
 * Integrate TLS for secure network communication between client/server and server/server
 * Use oblivious transfer or homomorphic encryption to securely generate beaver triples without the need for a discrete beaver triple server.
