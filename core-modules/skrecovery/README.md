@@ -50,7 +50,7 @@ cargo build
 First configure the server nodes in `server_conf.yml`. Any number of servers can be added. The default configuration runs with three servers; the first `N-1` servers are always MPC servers, and the last server is always the beaver triple server.
 
 #### 1.2 Client Configuration
-In line 93 of `client/main.rs` add the addresses of all the servers in `server_conf.yml` to the `node_addrs` list.
+In `client/main.rs:93` add the addresses of all the servers in `server_conf.yml` to the `node_addrs` list.
 
 #### 1.3 Start Nodes
 
