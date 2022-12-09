@@ -45,12 +45,20 @@ Install all the non-Cargo packages outlined in the [Dependencies](#dependencies)
 cargo build
 ```
 
-### 1. Start the nodes
-Run the following commands in one terminal.
+### 1. Setup Nodes
+#### 1.1 Server Configuration
+First configure the server nodes in `server_conf.yml`. Any number of servers can be added. The default configuration runs with three servers; the first `N-1` servers are always MPC servers, and the last server is always the beaver triple server.
+
+#### 1.2 Client Configuration
+In line 93 of `client/main.rs` add the addresses of all the servers in `server_conf.yml` to the `node_addrs` list.
+
+#### 1.3 Start Nodes
+
+Run the following command in one terminal.
 ```bash
 ./start_servers.sh
 ```
-This starts the MPC nodes and a beaver triple server (which has the highest client ID).
+
 
 ### 2. Start the client server
 Start the client in another terminal.
@@ -147,6 +155,6 @@ Recovered sk: Fp256 "(258D8AA38788B7F9FDDEA5AA9C0EFAE43460422AA5DEFEAFDE9A942A77
 
 # Future work
 * Evaluate performance as the number of participating servers / shards increases.
-* Add signatures to all messages between client/server and server/server. This would improve our threat model to protection against malicious attackers rather than semi-honest ones.
+* Add signatures to all messages between client/server and server/server. This would improve our threat model to protection against malicious attackers rather than semi-honest ones. Some work has already been done in this direction. See `core-modules/signing` for the current progress.
 * Integrate TLS for secure network communication between client/server and server/server
 * Use oblivious transfer or homomorphic encryption to securely generate beaver triples without the need for a discrete beaver triple server.
