@@ -14,11 +14,10 @@ use ark_ff::UniformRand;
 use std::net::TcpStream;
 
 const F_SIZE: usize = 32; // ceil(381 * 12 / 8)
-const BEAVER_SERVER: usize = 2;
 
-fn read_beaver_elt(socks: &mut Vec<TcpStream>) -> Result<F, SerializationError> {
+fn read_beaver_elt(socks: &mut Vec<TcpStream>, server_id: usize) -> Result<F, SerializationError> {
     let mut buf = [0u8; F_SIZE];
-    socks[2].read(&mut buf)?;
+    socks[server_id].read(&mut buf)?;
     F::deserialize_uncompressed(buf.as_slice())
 }
 
@@ -51,23 +50,25 @@ fn main() -> io::Result<()> {
 
     println!("rank {} starting", rank);
 
+    let beaver_server = socks.len() - 1;
+    let num_parties = socks.len() - 1;
 
     match &func_name[..] {
         "skrecovery" =>
         {
-            if rank == BEAVER_SERVER as u8 {
+            if rank == beaver_server as u8 {
                 let rng = &mut ChaCha20Rng::from_entropy();
                 let a = F::rand(rng);
                 let b = F::rand(rng);
                 let c = a * b;
 
-                let a_shards = shard_to_bytes::<F>(a, 2, rng);
-                let b_shards = shard_to_bytes::<F>(b, 2, rng);
-                let c_shards = shard_to_bytes::<F>(c, 2, rng);
+                let a_shards = shard_to_bytes::<F>(a, num_parties, rng);
+                let b_shards = shard_to_bytes::<F>(b, num_parties, rng);
+                let c_shards = shard_to_bytes::<F>(c, num_parties, rng);
 
                 for i in 0..socks.len() {
-                    if i != BEAVER_SERVER {
-                        // NOTE: only works if BEAVER_SERVER is the LAST NODE!
+                    if i != beaver_server {
+                        // NOTE: only works if beaver_server is the LAST NODE!
                         socks[i].write(&a_shards[i])?;
                         socks[i].write(&b_shards[i])?;
                         socks[i].write(&c_shards[i])?;
@@ -93,9 +94,9 @@ fn main() -> io::Result<()> {
                 let pwd_guess_shard = field_elts[2];
     
                 // TODO: write them all together
-                let beaver_a = read_beaver_elt(&mut socks).unwrap();
-                let beaver_b = read_beaver_elt(&mut socks).unwrap();
-                let beaver_c = read_beaver_elt(&mut socks).unwrap();
+                let beaver_a = read_beaver_elt(&mut socks, beaver_server).unwrap();
+                let beaver_b = read_beaver_elt(&mut socks, beaver_server).unwrap();
+                let beaver_c = read_beaver_elt(&mut socks, beaver_server).unwrap();
     
                 let rng = &mut ChaCha20Rng::from_entropy();
     
@@ -106,34 +107,59 @@ fn main() -> io::Result<()> {
                 let elts_to_write = (hiding - beaver_a, (pwd_shard - pwd_guess_shard) - beaver_b);
                 let mut v1 = Vec::new();
                 assert!(elts_to_write.serialize_uncompressed(&mut v1).is_ok());
-                socks[1 - rank as usize].write_all(&v1)?;
+
+                //broadcast to all other nodes
+                for i in 0..socks.len() {
+                    if i != (rank as usize) && i != beaver_server {
+                        socks[i as usize].write_all(&v1)?;
+                    }
+                }
     
                 let mut buf1 = [0u8; F_SIZE * 2];
-                socks[1 - rank as usize].read(&mut buf1)?;
-                let resp1 = <(F, F)>::deserialize_uncompressed(buf1.as_slice()).unwrap();
-    
-                let x_sub_a = resp1.0 + elts_to_write.0;
-                let y_sub_b = resp1.1 + elts_to_write.1;
+                let mut x_sub_a = elts_to_write.0;
+                let mut y_sub_b = elts_to_write.1;
+
+                for i in 0..socks.len() {
+                    if i != (rank as usize) && i != beaver_server {
+                        socks[i as usize].read(&mut buf1)?;
+                        let resp = <(F, F)>::deserialize_uncompressed(buf1.as_slice()).unwrap();
+                        x_sub_a += resp.0;
+                        y_sub_b += resp.1;
+                    }
+                }
     
                 // here, 0 is the special node who adds a little extra term, but it doesnt have to be like that. 
-                let z = match rank {
-                    0 => beaver_c + x_sub_a * beaver_b + y_sub_b * beaver_a,
-                    1 => beaver_c + x_sub_a * beaver_b + y_sub_b * beaver_a + x_sub_a * y_sub_b,
-                    _ => panic!("oops")
-                };
+                let z;
+                if rank == 0 {
+                    z = beaver_c + x_sub_a * beaver_b + y_sub_b * beaver_a + x_sub_a * y_sub_b;
+                } else if rank > (socks.len() as u8) - 1 {
+                    panic!("oops");
+                } else {
+                    z = beaver_c + x_sub_a * beaver_b + y_sub_b * beaver_a
+                }
     
                 // ROUND 2: exchange z's
                 // TODO make rounds more generic? it's basically just sending something serializable and deserializing it. 
     
                 let mut v2 = Vec::new();
+                let mut combined_z = z;
                 assert!(z.serialize_uncompressed(&mut v2).is_ok());
-                socks[1 - rank as usize].write(&v2)?;
-    
+                for i in 0..socks.len() {
+                    if i != (rank as usize) && i != beaver_server {
+                        socks[i as usize].write_all(&v2)?;
+                    }
+                }
+
                 let mut buf2 = [0u8; F_SIZE];
-                socks[1 - rank as usize].read(&mut buf2)?;
-                let other_z = F::deserialize_uncompressed(buf2.as_slice()).unwrap();
-    
-                let field_to_write: F = sk_shard * (z + other_z + F::one());
+                for i in 0..socks.len() {
+                    if i != (rank as usize) && i != beaver_server {
+                        socks[i as usize].read(&mut buf2)?;
+                        let z_share = F::deserialize_uncompressed(buf2.as_slice()).unwrap();
+                        combined_z += z_share;
+                    }
+                }
+
+                let field_to_write: F = sk_shard * (combined_z + F::one());
     
                 let mut result = Vec::new();
                 assert!(field_to_write.serialize_uncompressed(&mut result).is_ok());

@@ -15,9 +15,9 @@ use ark_bls12_381::{Fr as F};
 #[async_trait]
 pub trait SecretKeyRecoverable {
     // Encrypt the secret key?
-    async fn upload_sk_and_pwd(&self, id: String, sk: String, pwd: String);
-    async fn upload_pwd_guess(&self, id: String, pwd_guess: F);
-    async fn aggregate_sk(&self, id: String) -> Vec<u8>;
+    async fn upload_sk_and_pwd(&self, num_nodes: usize, id: String, sk: String, pwd: String);
+    async fn upload_pwd_guess(&self, num_nodes: usize, id: String, pwd_guess: F);
+    async fn aggregate_sk(&self, num_nodes: usize, id: String) -> Vec<u8>;
 }
 
 fn shard<F: Field>(n: F, num_shards: usize, rng: &mut impl RngCore) -> Vec<F>{
@@ -47,11 +47,11 @@ impl SecretKeyRecoverable for Client
 {
 
     // TODO I think we have to use 
-    async fn upload_sk_and_pwd(&self, id: String, sk: String, pwd: String) {
+    async fn upload_sk_and_pwd(&self, num_nodes: usize, id: String, sk: String, pwd: String) {
         let rng = &mut ChaCha20Rng::from_entropy();
         let sk_field = F::from_str(&sk).unwrap();
         println!("sk_field: {}", sk_field);
-        let sk_shards = shard::<F>(sk_field, 2, rng);
+        let sk_shards = shard::<F>(sk_field, num_nodes, rng);
         let mut sk_shards_bytes = sk_shards.iter().map(to_bytes::<F>)
             .collect::<Vec<_>>();
         sk_shards_bytes.push(Vec::new());
@@ -59,23 +59,23 @@ impl SecretKeyRecoverable for Client
 
         let pwd_field = <F>::from_random_bytes(pwd.as_bytes()).unwrap();
         println!("pwd_field: {}", pwd_field);
-        let pwd_shards = shard::<F>(pwd_field, 2, rng);
+        let pwd_shards = shard::<F>(pwd_field, num_nodes, rng);
         let mut pwd_shards_bytes = pwd_shards.iter().map(to_bytes::<F>).collect::<Vec<_>>();
         pwd_shards_bytes.push(Vec::new());
         self.upload_blob(id + "pwd.txt", pwd_shards_bytes).await;
     }
 
-    async fn upload_pwd_guess(&self, id: String, pwd_guess: F) {
+    async fn upload_pwd_guess(&self, num_nodes: usize, id: String, pwd_guess: F) {
         let rng = &mut ChaCha20Rng::from_entropy();
-        let guess_shards = shard::<F>(pwd_guess, 2, rng);
+        let guess_shards = shard::<F>(pwd_guess, num_nodes, rng);
         let mut guess_shards_bytes = guess_shards.iter().map(to_bytes::<F>).collect::<Vec<_>>();
         guess_shards_bytes.push(Vec::new());
         self.upload_blob(id + "guess.txt", guess_shards_bytes).await;
 
     }
-    async fn aggregate_sk(&self, id: String) -> Vec<u8> {
+    async fn aggregate_sk(&self, num_nodes: usize, id: String) -> Vec<u8> {
         let sk_shard_bytes = self.retrieve_blob(id + "recovered_sk.txt").await;
-        let f = sk_shard_bytes[..2].iter()
+        let f = sk_shard_bytes[..num_nodes].iter()
             .map(|v| F::deserialize_uncompressed(v.as_slice()).unwrap())
             .fold(F::zero(), |x, y| x + y);
 
@@ -90,13 +90,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     let cmd = &args[1];
 
-    let node_addrs = ["http://127.0.0.1:50051", "http://127.0.0.1:50052", "http://127.0.0.1:50053"];
+    let node_addrs = ["http://127.0.0.1:50051", "http://127.0.0.1:50052", "http://127.0.0.1:50053"]; // add to this list when there are more servers, TODO: is there better way to do this?
 
     let cli_id = "user1";
     let mut client = Client::new(cli_id);
 
     let app_name = "rust_app";
 
+    let num_nodes = node_addrs.len() - 1;
     client.setup(node_addrs.to_vec());
 
     match &cmd[..]{
@@ -129,7 +130,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 },
             };
             println!("Uploading sk {}, pwd {} for user {}", sk, pwd, id);
-            client.upload_sk_and_pwd(String::from(id), sk, pwd).await;
+            client.upload_sk_and_pwd(num_nodes, String::from(id), sk, pwd).await;
         }
         "recover_sk" => {
             let id: String = match args[2].parse() {
@@ -151,7 +152,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 },
             };
             println!("Uploading guess ...");
-            client.upload_pwd_guess(String::from(&id), pwd_guess).await;
+            client.upload_pwd_guess(num_nodes, String::from(&id), pwd_guess).await;
             println!("Guess uploaded");
 
             println!("Recovering sk with pwd guess {}, for user {}", pwd_guess, id);
@@ -167,7 +168,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .await?;
 
             println!("Aggregating SK on client");
-            let s = client.aggregate_sk(id).await;
+            let s = client.aggregate_sk(num_nodes, id).await;
 
             let f = F::deserialize_uncompressed(s.as_slice()).unwrap(); 
             
