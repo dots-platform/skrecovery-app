@@ -8,7 +8,10 @@ nodes:
     ports: [52000]  
   node3:
     addr: "127.0.0.1:50053"
-    ports: [53000]                 
+    ports: [53000]    
+  node4:
+    addr: "127.0.0.1:50054"
+    ports: [54000]                
 
 apps:
   rust_app:

@@ -3,7 +3,6 @@ use std::str::FromStr;
 
 use dtrust::client::Client;
 use async_trait::async_trait;
-use rand::{RngCore};
 use rand_chacha::ChaCha20Rng;
 use rand::prelude::*;
 
@@ -12,34 +11,16 @@ use ark_ff::fields::Field;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
 use ark_bls12_381::{Fr as F};
+
+#[path = "../util.rs"] mod util;
+use util::shard_to_bytes;
+
 #[async_trait]
 pub trait SecretKeyRecoverable {
     // Encrypt the secret key?
     async fn upload_sk_and_pwd(&self, num_nodes: usize, id: String, sk: String, pwd: String);
     async fn upload_pwd_guess(&self, num_nodes: usize, id: String, pwd_guess: F);
     async fn aggregate_sk(&self, num_nodes: usize, id: String) -> Vec<u8>;
-}
-
-fn shard<F: Field>(n: F, num_shards: usize, rng: &mut impl RngCore) -> Vec<F>{
-    // Initialize random number array, sum
-    let random_vals = (0..num_shards).map(|_| F::rand(rng)).collect::<Vec<F>>();
-    let sum = random_vals.iter().sum();
-    // Find the inverse of sum
-    let sum_inv = match F::inverse(&sum) {
-        Some(s) => s,
-        None => panic!("some random numbers summed to zero, go buy a lottery ticket")
-    };
-    // Multiple all n random numbers by sk * sum^-1
-    let shards = random_vals.iter().map(|x| *x * sum_inv * n).collect::<Vec<F>>();
-    // Return shards
-    shards
-}
-
-/// There's a more rust-y way to do implement these conversions - use the From trait
-fn to_bytes<F: Field>(n: &F) -> Vec<u8> {
-    let mut v = Vec::new();
-    assert!(n.serialize_uncompressed(&mut v).is_ok());
-    v
 }
 
 #[async_trait]
@@ -50,25 +31,20 @@ impl SecretKeyRecoverable for Client
     async fn upload_sk_and_pwd(&self, num_nodes: usize, id: String, sk: String, pwd: String) {
         let rng = &mut ChaCha20Rng::from_entropy();
         let sk_field = F::from_str(&sk).unwrap();
-        println!("sk_field: {}", sk_field);
-        let sk_shards = shard::<F>(sk_field, num_nodes, rng);
-        let mut sk_shards_bytes = sk_shards.iter().map(to_bytes::<F>)
-            .collect::<Vec<_>>();
+        let mut sk_shards_bytes = shard_to_bytes::<F>(sk_field, num_nodes, rng);
         sk_shards_bytes.push(Vec::new());
         self.upload_blob(id.to_owned() + "sk.txt", sk_shards_bytes).await;
 
         let pwd_field = <F>::from_random_bytes(pwd.as_bytes()).unwrap();
         println!("pwd_field: {}", pwd_field);
-        let pwd_shards = shard::<F>(pwd_field, num_nodes, rng);
-        let mut pwd_shards_bytes = pwd_shards.iter().map(to_bytes::<F>).collect::<Vec<_>>();
+        let mut pwd_shards_bytes = shard_to_bytes::<F>(pwd_field, num_nodes, rng);
         pwd_shards_bytes.push(Vec::new());
         self.upload_blob(id + "pwd.txt", pwd_shards_bytes).await;
     }
 
     async fn upload_pwd_guess(&self, num_nodes: usize, id: String, pwd_guess: F) {
         let rng = &mut ChaCha20Rng::from_entropy();
-        let guess_shards = shard::<F>(pwd_guess, num_nodes, rng);
-        let mut guess_shards_bytes = guess_shards.iter().map(to_bytes::<F>).collect::<Vec<_>>();
+        let mut guess_shards_bytes = shard_to_bytes::<F>(pwd_guess, num_nodes, rng);
         guess_shards_bytes.push(Vec::new());
         self.upload_blob(id + "guess.txt", guess_shards_bytes).await;
 
@@ -90,7 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     let cmd = &args[1];
 
-    let node_addrs = ["http://127.0.0.1:50051", "http://127.0.0.1:50052", "http://127.0.0.1:50053"]; // add to this list when there are more servers, TODO: is there better way to do this?
+    let node_addrs = ["http://127.0.0.1:50051", "http://127.0.0.1:50052", "http://127.0.0.1:50053", "http://127.0.0.1:50054"];
 
     let cli_id = "user1";
     let mut client = Client::new(cli_id);
