@@ -85,7 +85,8 @@ The following other dependencies should be preinstalled on the system as well. P
 * [grpcio](https://pypi.org/project/grpcio/) 1.51.1
 
 # Tests
-We tested the server by running the code ourselves and feeding it correct and incorrect password guesses.
+* `utils.rs` contains two functions `test_shard()` and `test_shard_to_bytes()` which can be used to verify the behavior of their respective functions. 
+* We also tested the server by running the code ourselves and feeding it correct and incorrect password guesses.
 
 ## Upload secret key and password
 ```bash
