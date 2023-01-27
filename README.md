@@ -8,18 +8,18 @@ Distributing trust has become a fundamental principle in building many of today'
 People claim ownership to crypto assets and authorize transactions using private keys. If these keys are lost, then the user permanently lose access to their assets. To protect these private keys, cryptocurrency custody service (e.g. Fireblocks) distribute the keys to multiple servers. Each server holds a secret share of the key, and the servers jointly run secure multi-party computation to authorize transactions with the key.
 
 ### Federated blockchain bridges.
-Blockchain bridges enable users to transfer crypto assets or data between two different chains. A federated bridge distributes trust among a committee of stakeholders, who jointly facilitates the transfer of funds. A user that wants to transfer fund to another blockchain would first lock his assets from the source chain into the bridge. The committee then runs an MPC algorithm to jointly produce a minting signature. The user can use this signature to claim a respective token on the destination chain. 
+Blockchain bridges enable users to transfer crypto assets or data between two different chains. A federated bridge distributes trust among a committee of stakeholders, who jointly facilitates the transfer of funds. A user that wants to transfer fund to another blockchain would first lock his assets from the source chain into the bridge. The committee then runs an MPC algorithm to jointly produce a minting signature. The user can use this signature to claim a respective token on the destination chain.
 
 ### Distributed PKI
-A Distributed Public key infrastructure (PKI) logs clients' public keys on multiple servers. These servers jointly maintain a consistent global view of users' public key. A user can check if his public key is not tampered with by comparing if the public keys stored on these servers are equal to each other.  
+A Distributed Public key infrastructure (PKI) logs clients' public keys on multiple servers. These servers jointly maintain a consistent global view of users' public key. A user can check if his public key is not tampered with by comparing if the public keys stored on these servers are equal to each other.
 
 
 ### Collaborative learning/analytics.
-Multiple organizations (e.g. banks, hospitals) wants to jointly train a ML model or performing analytics using their sensitive data. They can use MPC to run collaborative learning/analytics without revealing their sensitive data to each other. 
+Multiple organizations (e.g. banks, hospitals) wants to jointly train a ML model or performing analytics using their sensitive data. They can use MPC to run collaborative learning/analytics without revealing their sensitive data to each other.
 
 
 ## Getting Started
-Our platform can run on MacOS and Linux. Windows is currently not supported. 
+Our platform can run on MacOS and Linux. Windows is currently not supported.
 
 ### 1. Installing Protocol Buffer Compiler
 First, make sure `protoc` is installed on your machine, and its version is 3+. If not, follow [https://grpc.io/docs/protoc-installation/](https://grpc.io/docs/protoc-installation/) to install it.
@@ -43,16 +43,17 @@ First, we need to initialize the DTrust platform on multiple servers. We can use
 
 On terminal 1:
 ```bash
-./platform/init_server --node_id node1 --config ./core-modules/pki/server_conf.yml
+./platform/init_server --node_id node1 --config ./core-modules/pki/server_conf_tcp.yml
 ```
 
 On terminal 2:
 ```bash
-./platform/init_server --node_id node2 --config ./core-modules/pki/server_conf.yml
+./platform/init_server --node_id node2 --config ./core-modules/pki/server_conf_tcp.yml
 ```
+You can alternatively initialize the nodes to establish tls connections by following the instructions at [docs/tls.md](docs/tls.md)
 
 ### 4. Running an example application
-The `core-modules/pki` folder contains an example application called distributed PKI (public key infrastructure) written in Rust. This app enables a client to store his public key on multiple nodes. Other clients who want to talk to this client can then retrieve the public key from these servers. To run the client, open a another terminal and type in the following commands. 
+The `core-modules/pki` folder contains an example application called distributed PKI (public key infrastructure) written in Rust. This app enables a client to store his public key on multiple nodes. Other clients who want to talk to this client can then retrieve the public key from these servers. To run the client, open a another terminal and type in the following commands.
 
 ```bash
 cd core-modules/pki
@@ -65,20 +66,22 @@ You should see the message: "recovered public-key: "random_public_key"" at the b
 
 
 ## Workflow of a decentralized application
-The BDots platform consists of a client and multiple decentralized nodes (servers). The client interacts with the nodes through gRPC requests. BDots provide network connections between these servers, handles file storage, and offers common crypto primitives (under development) for applications built on top of the platform. Below is a diagram that outline the overall architecture of BDots.
+The BDots platform consists of a client and multiple decentralized nodes (servers). The client interacts with the nodes through gRPC requests. BDots provide network connections between these servers, handles file storage, and offers common crypto primitives (under development) for applications built on top of the platform. Below is a diagram that outline the overall architecture of BDots. 
 <img src="imgs/arch.png"  width="500" title="Employee Data title">
 
 A typical decentralized application consists of the following steps:
 1. A client performs some local pre-computation, and uploads the results of the pre-computations to the servers. The pre-computation results are stored as files on the servers.
-2. The client initiates a request to execute a decentralized app remotely on the servers. The servers take the input files as specified by the client, jointly executes the decentralized app, and stores the results to output files specified by the client. 
+2. The client initiates a request to execute a decentralized app remotely on the servers. The servers take the input files as specified by the client, jointly executes the decentralized app, and stores the results to output files specified by the client.
 3. The client downloads the results from the servers, and performs some post-computation on the results locally.
 
-The above workflow only provides a general guideline for developing decentralized applications. A decentralized application does not need to follow these steps exactly. Each step is separate and composable from each other, and can be optional depending on the specific application you are building. For example, an app that does secret-key recovery does not have any server side computations, so it can skip step 2.  
+The above workflow only provides a general guideline for developing decentralized applications. A decentralized application does not need to follow these steps exactly. Each step is separate and composable from each other, and can be optional depending on the specific application you are building. For example, an app that does secret-key recovery does not have any server side computations, so it can skip step 2.
 
-# Tutorials
-To learn more about the BDoTS platform as well as this example application, checkout our [tutorial](tutorial.md) . They will equip you with the necessary knowledge to develop your own decentralized applications on BDoTS.
+# Docs
+To learn more about the BDoTS platform as well as this example application, checkout our [tutorial](docs/client_apps.md) . They will equip you with the necessary knowledge to develop your own decentralized applications on BDoTS.
 
-We add a [second tutorial](tutorial2.md) specifically on how to develop server-side applications. Check it out if your project has server-side functionalities. 
+We add a [second tutorial](docs/server_apps.md) specifically on how to develop server-side applications. Check it out if your project has server-side functionalities.
+
+For toggling between TLS and TCP between clients and servers, see [here](docs/tls.md).
 
 # Join our Discord channels
 If you have any questions or want to hear about our latest updates, come join our [discord](https://discord.gg/uVVyTFDpXV) channel.

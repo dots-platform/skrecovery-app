@@ -36,15 +36,27 @@ impl PublicKeyStorage for Client {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
-    let cmd = &args[1]; 
+    let cmd = &args[1];
 
-    let node_addrs = ["http://127.0.0.1:50051", "http://127.0.0.1:50052"];
+    let use_tls: bool = true;
+    let node_addrs =
+        if use_tls == true {
+            ["https://node1.test:50051", "https://node2.test:50052"]
+        } else {
+            ["http://127.0.0.1:50051", "http://127.0.0.1:50052"]
+        };
+    let rootca_certpath =
+        if use_tls == true {
+            Some("tls_certs/myCA.pem")
+        } else {
+            None
+        };
 
     let cli_id = "user1";
     let mut client = Client::new(cli_id);
-    
-    client.setup(node_addrs.to_vec());
-    
+
+    client.setup(node_addrs.to_vec(), rootca_certpath);
+
     match &cmd[..]{
         "upload_pk" => {
             let id: String = match args[2].parse() {
@@ -67,8 +79,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             println!("Uploading pk {} for user {}", pk, id);
             client.upload_pk(String::from(id), pk).await;
-            
-        }  
+
+        }
         "recover_pk" => {
             //println!("Recovering pk");
             let id: String = match args[2].parse() {

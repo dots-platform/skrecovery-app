@@ -67,16 +67,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     let cmd = &args[1];
 
-    let node_addrs = [
-        "http://127.0.0.1:50051",
-        "http://127.0.0.1:50052",
-        "http://127.0.0.1:50053",
-    ];
+    let use_tls: bool = true;
+
+    let node_addrs =
+        if use_tls == true {
+            ["https://node1.test:50051", "https://node2.test:50052", "https://node3.test:50053"]
+        } else {
+            ["http://127.0.0.1:50051", "http://127.0.0.1:50052", "http://127.0.0.1:50053"]
+        };
+    let rootca_certpath =
+        if use_tls == true {
+            Some("tls_certs/myCA.pem")
+        } else {
+            None
+        };
 
     let cli_id = "user1";
     let app_name = "rust_app";
     let mut client = Client::new(cli_id);
-    client.setup(node_addrs.to_vec());
+    client.setup(node_addrs.to_vec(), rootca_certpath);
 
     let num_parties: u16 = match args[2].parse() {
         Ok(s) => s,
