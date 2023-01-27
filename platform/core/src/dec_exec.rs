@@ -1,4 +1,3 @@
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct App {
     #[prost(string, tag = "1")]
@@ -14,7 +13,6 @@ pub struct App {
     #[prost(string, tag = "6")]
     pub client_id: ::prost::alloc::string::String,
 }
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Blob {
     #[prost(string, tag = "1")]
@@ -24,7 +22,6 @@ pub struct Blob {
     #[prost(string, tag = "3")]
     pub client_id: ::prost::alloc::string::String,
 }
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Result {
     #[prost(string, tag = "1")]
@@ -160,7 +157,7 @@ pub mod dec_exec_client {
 pub mod dec_exec_server {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     use tonic::codegen::*;
-    /// Generated trait containing gRPC methods that should be implemented for use with DecExecServer.
+    ///Generated trait containing gRPC methods that should be implemented for use with DecExecServer.
     #[async_trait]
     pub trait DecExec: Send + Sync + 'static {
         async fn exec(

@@ -80,7 +80,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app_name = "rust_app";
 
     let num_nodes = node_addrs.len() - 1;
-    client.setup(node_addrs.to_vec());
+    client.setup(node_addrs.to_vec(), None);
 
     match &cmd[..] {
         "upload_sk_and_pwd" => {

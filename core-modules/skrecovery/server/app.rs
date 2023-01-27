@@ -117,6 +117,7 @@ fn main() -> io::Result<()> {
                     z = beaver_c + x_sub_a * beaver_b + y_sub_b * beaver_a
                 }
 
+                println!("{}", z);
                 // ROUND 2: exchange z's
                 // TODO make rounds more generic? it's basically just sending something serializable and deserializing it.
 
