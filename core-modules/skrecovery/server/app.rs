@@ -11,7 +11,7 @@ use std::net::TcpStream;
 
 #[path = "../util.rs"]
 mod util;
-use util::shard_to_bytes;
+//use util::shard_to_bytes;
 
 const F_SIZE: usize = 32;
 
@@ -51,40 +51,17 @@ fn main() -> io::Result<()> {
 
             let random_scalar = Scalar::random(&mut rng);
             let z = random_scalar * (pwd_shard - pwd_guess_shard);
-            
-            let z_shares = Shamir::<2, 4>::split_secret::<Scalar, ChaCha20Rng, 33>(z, &mut rng)?
-                .map(|x| x.value());
-            // broadcast to all other nodes
-            for i in 0..socks.len() {
-                if i != (rank as usize) {
-                    socks[i as usize].write_all(z_shares[i])?;
-                }
-            }
 
-            let mut sum = Scalar::zero();
-            let mut buf = [0; 33];
+            let field_to_write: Scalar = sk_shard + z;
+            let mut result = Vec::new();
 
-            let shares = socks.iter().enumerate().map(|i, sock| {
-                if i != (rank as usize) {
-                    socks[i as usize].read(&mut buf);
-                    Share::from(buf)
-                } else {
-                    Share::default()
-                }
-            }).collect::<Vec<Share>>();
-
-            let product_share = shares.iter().enumerate().map(|i, share| {
-                let v = Scalar::from(share.identifier());
-                let y = share.as_field_element().unwrap();
-
-                
-            });
-
-
+            // TODO: replace with correct way to serialize scalar
+            assert!(field_to_write.serialize_uncompressed(&mut result).is_ok());
             assert_eq!(out_files.len(), 1);
             let mut out_file = &out_files[0];
-            // out_file.write_all(&result)?;
+            out_file.write_all(&result)?;
 
+            // TODO: send back salt and hash
             Ok(())
         }
         _ => panic!(),

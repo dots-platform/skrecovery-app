@@ -1,5 +1,4 @@
-use ark_ff::Field;
-use rand::RngCore;
+/* use rand::RngCore;
 
 pub fn shard<F: Field>(n: F, num_shards: usize, rng: &mut impl RngCore) -> Vec<F> {
     // Initialize random number array, sum
@@ -66,3 +65,4 @@ fn test_shard_to_bytes() {
         assert_eq!(s, f);
     }
 }
+*/
