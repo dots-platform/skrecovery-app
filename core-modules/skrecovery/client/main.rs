@@ -1,16 +1,13 @@
 use std::env;
-use std::str::FromStr;
 
 use async_trait::async_trait;
 use dtrust::client::Client;
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 
-use ark_ff::fields::Field;
-use ark_ff::Zero;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-
-use ark_bls12_381::Fr as F;
+use elliptic_curve::{ff::PrimeField, generic_array::GenericArray};
+use p256::{NonZeroScalar, Scalar, SecretKey};
+use vsss_rs::Shamir;
 
 #[path = "../util.rs"]
 mod util;
@@ -20,7 +17,7 @@ use util::shard_to_bytes;
 pub trait SecretKeyRecoverable {
     // Encrypt the secret key?
     async fn upload_sk_and_pwd(&self, num_nodes: usize, id: String, sk: String, pwd: String);
-    async fn upload_pwd_guess(&self, num_nodes: usize, id: String, pwd_guess: F);
+    async fn upload_pwd_guess(&self, num_nodes: usize, id: String, pwd_guess: String);
     async fn aggregate_sk(&self, num_nodes: usize, id: String) -> Vec<u8>;
 }
 
@@ -29,35 +26,35 @@ impl SecretKeyRecoverable for Client {
     // TODO I think we have to use
     async fn upload_sk_and_pwd(&self, num_nodes: usize, id: String, sk: String, pwd: String) {
         let rng = &mut ChaCha20Rng::from_entropy();
-        let sk_field = F::from_str(&sk).unwrap();
-        let mut sk_shards_bytes = shard_to_bytes::<F>(sk_field, num_nodes, rng);
-        sk_shards_bytes.push(Vec::new());
-        self.upload_blob(id.to_owned() + "sk.txt", sk_shards_bytes)
+        let sk = SecretKey::from(sk);
+        let nzs = sk.to_nonzero_scalar();
+        // 32 for field size, 1 for identifier = 33
+        let res = Shamir::<2, 4>::split_secret::<Scalar, ChaCha20Rng, 33>(*nzs.as_ref(), &mut rng)?;
+        self.upload_blob(id.to_owned() + "sk.txt", res.map(|x| x.value()))
             .await;
 
-        let pwd_field = F::from_random_bytes(pwd.as_bytes()).unwrap();
-        println!("pwd_field: {}", pwd_field);
-        let mut pwd_shards_bytes = shard_to_bytes::<F>(pwd_field, num_nodes, rng);
-        pwd_shards_bytes.push(Vec::new());
-        self.upload_blob(id + "pwd.txt", pwd_shards_bytes).await;
+        let pwd = Scalar::from(pwd);
+        let pwd_shares = Shamir::<2, 4>::split_secret::<Scalar, ChaCha20Rng, 33>(*pwd.as_ref(), &mut rng)?;
+        Shamir::<2,4>::
+        self.upload_blob(id + "pwd.txt", pwd_shares.map(|x| x.value())).await;
     }
 
-    async fn upload_pwd_guess(&self, num_nodes: usize, id: String, pwd_guess: F) {
+    async fn upload_pwd_guess(&self, num_nodes: usize, id: String, pwd_guess: String) {
         let rng = &mut ChaCha20Rng::from_entropy();
-        let mut guess_shards_bytes = shard_to_bytes::<F>(pwd_guess, num_nodes, rng);
-        guess_shards_bytes.push(Vec::new());
-        self.upload_blob(id + "guess.txt", guess_shards_bytes).await;
+        let pwd_guess = Scalar::from(pwd_guess);
+        let pwd_guess_shares = Shamir::<2, 4>::split_secret::<Scalar, ChaCha20Rng, 33>(*pwd_guess.as_ref(), &mut rng)?;
+        self.upload_blob(id + "guess.txt", pwd_guess_shares.map(|x| x.value())).await;
     }
     async fn aggregate_sk(&self, num_nodes: usize, id: String) -> Vec<u8> {
-        let sk_shard_bytes = self.retrieve_blob(id + "recovered_sk.txt").await;
-        let f = sk_shard_bytes[..num_nodes]
-            .iter()
-            .map(|v| F::deserialize_uncompressed(v.as_slice()).unwrap())
-            .fold(F::zero(), |x, y| x + y);
+        let sk_shares = self.retrieve_blob(id + "recovered_sk.txt").await
+            .map(|x| Shamir::Share{x});
 
-        let mut buf = Vec::new();
-        assert!(f.serialize_uncompressed(&mut buf).is_ok());
-        buf
+        let res = Shamir::<2, 4>::combine_shares::<Scalar, 33>(&sk_shares);
+        assert!(res.is_ok());
+        let scalar = res.unwrap();
+        let nzs_dup =  NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
+        let sk = SecretKey::from(nzs_dup);
+        sk.to_be_bytes();
     }
 }
 
@@ -65,8 +62,6 @@ impl SecretKeyRecoverable for Client {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     let cmd = &args[1];
-
-    // Set up for 3 participating servers, and one beaver triple dealing server
     let node_addrs = [
         "http://127.0.0.1:50051",
         "http://127.0.0.1:50052",
@@ -117,7 +112,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
             let pwd_guess = match args[3].parse::<String>() {
-                Ok(s) => F::from_random_bytes(s.as_bytes()).unwrap(),
+                Ok(s) => s,
                 Err(_) => {
                     eprintln!("error: pwd guess not a string");
                     panic!("");
@@ -154,7 +149,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Aggregating SK on client");
             let s = client.aggregate_sk(num_nodes, id).await;
 
-            let f = F::deserialize_uncompressed(s.as_slice()).unwrap();
+            let f = SecretKey::from_be_bytes(s.as_slice());
 
             println!("Recovered sk: {}", f);
         }
