@@ -38,10 +38,7 @@ fn main() -> io::Result<()> {
                     if f.read_to_end(&mut buf).is_err() {
                         panic!("Error reading file");
                     }
-                    println!("rank {} read {:?} len {}", rank ,buf, buf.len());
                     let share = Share::<33>::try_from(buf.as_slice()).unwrap();
-
-                    println!("ID: {}, value: {:?}", share.identifier(), share.value());
                     (share.identifier(), share.as_field_element().unwrap())
                 })
                 .collect::<Vec<(u8, Scalar)>>();
@@ -54,8 +51,7 @@ fn main() -> io::Result<()> {
             let mut v = vec![id];
             v.extend(sk_share.to_bytes());
 
-
-            // TODO check that all ids are the same maybe this is extra idk
+            // TODO check that all ids are the same maybe this isn't necessary
 
             let random_scalar = Scalar::random(rng);
             let z = random_scalar * (pwd_share - pwd_guess_share) + Scalar::one();
@@ -67,8 +63,6 @@ fn main() -> io::Result<()> {
             assert_eq!(out_files.len(), 1);
             let mut out_file = &out_files[0];
             out_file.write_all(&result)?;
-
-            // TODO: send back salt and hash
             Ok(())
         }
         _ => panic!(),
