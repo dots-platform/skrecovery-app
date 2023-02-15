@@ -1,3 +1,6 @@
+pub const THRESHOLD: usize = 2;
+pub const NUM_SERVERS: usize = 5;
+
 /* use rand::RngCore;
 
 pub fn shard<F: Field>(n: F, num_shards: usize, rng: &mut impl RngCore) -> Vec<F> {

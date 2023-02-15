@@ -28,35 +28,42 @@ fn main() -> io::Result<()> {
 
     match &func_name[..] {
         "skrecovery" => {
-            
             // compute R(PW-PWG) share locally
             let rng = &mut ChaCha20Rng::from_entropy();
 
-            let shares = in_files.iter().map(|mut f| {
-                let mut buf = [0; 33];
-                if f.read_exact(&mut buf).is_err() {
-                    panic!("Error reading file");
-                }
-                let share = Share::from(buf);
+            let shares = in_files
+                .iter()
+                .map(|mut f| {
+                    let mut buf = Vec::new();
+                    if f.read_to_end(&mut buf).is_err() {
+                        panic!("Error reading file");
+                    }
+                    println!("rank {} read {:?} len {}", rank ,buf, buf.len());
+                    let share = Share::<33>::try_from(buf.as_slice()).unwrap();
 
-                (share.identifier(), share.as_field_element())
+                    println!("ID: {}, value: {:?}", share.identifier(), share.value());
+                    (share.identifier(), share.as_field_element().unwrap())
+                })
+                .collect::<Vec<(u8, Scalar)>>();
 
-            }).collect::<Vec<(u8, Scalar)>>();
-            
-            let sk_shard = shares[0].1;
-            let pwd_shard = shares[1].1;
-            let pwd_guess_shard = shares[2].1;
+            let id = shares[0].0;
+            let sk_share = shares[0].1;
+            let pwd_share = shares[1].1;
+            let pwd_guess_share = shares[2].1;
+
+            let mut v = vec![id];
+            v.extend(sk_share.to_bytes());
+
 
             // TODO check that all ids are the same maybe this is extra idk
 
-            let random_scalar = Scalar::random(&mut rng);
-            let z = random_scalar * (pwd_shard - pwd_guess_shard);
+            let random_scalar = Scalar::random(rng);
+            let z = random_scalar * (pwd_share - pwd_guess_share) + Scalar::one();
 
-            let field_to_write: Scalar = sk_shard + z;
-            let mut result = Vec::new();
+            let field_to_write: Scalar = sk_share * z;
+            let mut result = vec![id];
+            result.extend(field_to_write.to_bytes());
 
-            // TODO: replace with correct way to serialize scalar
-            assert!(field_to_write.serialize_uncompressed(&mut result).is_ok());
             assert_eq!(out_files.len(), 1);
             let mut out_file = &out_files[0];
             out_file.write_all(&result)?;
