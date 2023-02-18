@@ -18,4 +18,4 @@ path = "client/main.rs"
 
 [[bin]]
 name = "rust_app"
-path = "server/app.rs"
+path = "rust_app/app.rs"
