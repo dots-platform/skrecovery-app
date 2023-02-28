@@ -17,6 +17,7 @@ elliptic-curve = "0.12.3"
 hex-literal = "0.3.4"
 base16ct = "0.1.1"
 blake2 = "0.10.6"
+itertools = "0.10.5"
 p256 = { version = "0.11.1", features = ["arithmetic", "bits"] }
 
 clap = { version = "3.2.19", features = ["derive"] }

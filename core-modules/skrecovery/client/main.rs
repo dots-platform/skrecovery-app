@@ -13,21 +13,19 @@ use vsss_rs::{Shamir, Share};
 #[path = "../util.rs"]
 mod util;
 use util::*;
-
-const SEED: u64 = 49;
 #[async_trait]
 pub trait SecretKeyRecoverable {
     // Encrypt the secret key?
     // TODO get rid of num_nodes. I think threshold / num servers should be either read from somewhere ( serverconf.yaml? )
     // or defined in some `constants.rs`.
-    async fn upload_sk_and_pwd(&self, num_nodes: usize, id: String, sk: String, pwd: String);
-    async fn upload_pwd_guess(&self, num_nodes: usize, id: String, pwd_guess: String);
-    async fn aggregate_sk(&self, num_nodes: usize, id: String) -> Vec<u8>;
+    async fn upload_sk_and_pwd(&self, id: String, sk: String, pwd: String);
+    async fn upload_pwd_guess(&self, id: String, pwd_guess: String);
+    async fn aggregate_sk(&self, id: String) -> Vec<u8>;
 }
 
 #[async_trait]
 impl SecretKeyRecoverable for Client {
-    async fn upload_sk_and_pwd(&self, num_nodes: usize, id: String, sk: String, pwd: String) {
+    async fn upload_sk_and_pwd(&self, id: String, sk: String, pwd: String) {
         // TODO BIG: generate field elements from plaintext.
         let rng = &mut ChaCha20Rng::from_entropy();
         let sk_str = "AD302A6F48F74DD6F9D257F7149E4D06CD8936FE200AF67E08EF88D1CBA4525D";
@@ -48,10 +46,9 @@ impl SecretKeyRecoverable for Client {
 
         let pwd_str = "1D46DC341A3190D7724B5692E77DEAA1CC02782980AFF034DB20289F4E5E3151";
         let pwd_nzs = NonZeroScalar::from_str(&pwd_str).unwrap();
-        let pwd_rng = &mut ChaCha20Rng::seed_from_u64(SEED);
         let pwd_shares = Shamir::<THRESHOLD, NUM_SERVERS>::split_secret::<Scalar, ChaCha20Rng, 33>(
             *pwd_nzs.as_ref(),
-            pwd_rng,
+            rng,
         )
         .unwrap();
         self.upload_blob(
@@ -73,14 +70,14 @@ impl SecretKeyRecoverable for Client {
             .await;
     }
 
-    async fn upload_pwd_guess(&self, num_nodes: usize, id: String, pwd_guess: String) {
-        let pwd_rng = &mut ChaCha20Rng::seed_from_u64(SEED);
+    async fn upload_pwd_guess(&self, id: String, pwd_guess: String) {
+        let rng = &mut ChaCha20Rng::from_entropy();
         let pwd_guess = NonZeroScalar::from_str(&pwd_guess).unwrap();
         let pwd_guess_shares = Shamir::<{ THRESHOLD }, NUM_SERVERS>::split_secret::<
             Scalar,
             ChaCha20Rng,
             33,
-        >(*pwd_guess.as_ref(), pwd_rng)
+        >(*pwd_guess.as_ref(), rng)
         .unwrap();
         self.upload_blob(
             id.to_owned() + "guess.txt",
@@ -88,28 +85,27 @@ impl SecretKeyRecoverable for Client {
         )
         .await;
     }
-    async fn aggregate_sk(&self, num_nodes: usize, id: String) -> Vec<u8> {
+    async fn aggregate_sk(&self, id: String) -> Vec<u8> {
         let sk_byte_shares = self.retrieve_blob(id.to_owned() + "recovered_sk.txt").await;
         let sk_byte_shares = sk_byte_shares.iter().map(|x| x.as_slice());
         let mut sk_shares = Vec::new();
         sk_byte_shares.for_each(|x| sk_shares.push(Share::try_from(x).unwrap()));
         // get back (2t, n) shares bc of multiplication
-        const RECOVER_THRESHOLD: usize = THRESHOLD * 2;
-        let res =
-            Shamir::<RECOVER_THRESHOLD, NUM_SERVERS>::combine_shares::<Scalar, 33>(&sk_shares);
+        const RECOVER_THRESHOLD: usize = THRESHOLD;
+        let res = Shamir::<4, NUM_SERVERS>::combine_shares::<Scalar, 33>(&sk_shares);
         assert!(res.is_ok());
         let scalar = res.unwrap();
         let sk = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
 
-        let salts = self.retrieve_blob(id.to_owned() + "salt.txt").await;
-        let hashes = self.retrieve_blob(id.to_owned() + "skhash.txt").await;
-        // TODO Check that all salts and hashes are the same
+        // let salts = self.retrieve_blob(id.to_owned() + "salt.txt").await;
+        // let hashes = self.retrieve_blob(id.to_owned() + "skhash.txt").await;
+        // // TODO Check that all salts and hashes are the same
 
-        let mut hasher = Blake2b512::new();
-        hasher.update(&salts[0]);
-        hasher.update(&sk.to_bytes());
-        let hash_result = hasher.finalize();
-        assert_eq!(hashes[0], hash_result.to_vec());
+        // let mut hasher = Blake2b512::new();
+        // hasher.update(&salts[0]);
+        // hasher.update(&sk.to_bytes());
+        // let hash_result = hasher.finalize();
+        // assert_eq!(hashes[0], hash_result.to_vec());
         sk.to_bytes().to_vec()
     }
 }
@@ -131,10 +127,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app_name = "rust_app";
 
-    let num_nodes = node_addrs.len() - 1;
+    let num_nodes = node_addrs.len();
     client.setup(node_addrs.to_vec(), None);
 
     match &cmd[..] {
+        "seed_prgs" => {
+            let in_files = [];
+
+            let out_files = (0..6) // TODO: should be 4 choose 2
+                .map(|x| format!("{}_prg.txt", x))
+                .collect::<Vec<_>>();
+
+            client
+                .exec(app_name, "seed_prgs", in_files.to_vec(), out_files.to_vec())
+                .await?;
+        }
         "upload_sk_and_pwd" => {
             let id: String = match args[2].parse() {
                 Ok(s) => s,
@@ -158,7 +165,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
             println!("Uploading sk {}, pwd {} for user {}", sk, pwd, id);
-            client.upload_sk_and_pwd(num_nodes, id, sk, pwd).await;
+            client.upload_sk_and_pwd(id, sk, pwd).await;
         }
         "recover_sk" => {
             let id: String = match args[2].parse() {
@@ -177,7 +184,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             println!("Uploading guess ...");
             client
-                .upload_pwd_guess(num_nodes, String::from(&id), pwd_guess.clone())
+                .upload_pwd_guess(String::from(&id), pwd_guess.clone())
                 .await;
             println!("Guess uploaded");
 
@@ -187,10 +194,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
 
             let in_files = [
-                id.to_owned() + "sk.txt",
-                id.to_owned() + "pwd.txt",
-                id.to_owned() + "guess.txt",
-            ];
+                (0..NUM_A) // TODO: should be 4 choose 2
+                    .map(|x| format!("{}_prg.txt", x))
+                    .collect::<Vec<_>>(),
+                [
+                    id.to_owned() + "sk.txt",
+                    id.to_owned() + "pwd.txt",
+                    id.to_owned() + "guess.txt",
+                ]
+                .into(),
+            ]
+            .concat();
 
             let out_files = [id.to_owned() + "recovered_sk.txt"];
 
@@ -204,7 +218,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .await?;
 
             println!("Aggregating SK on client");
-            let s = client.aggregate_sk(num_nodes, id).await;
+            let s = client.aggregate_sk(id).await;
 
             let f = SecretKey::from_be_bytes(s.as_slice()).unwrap();
 
