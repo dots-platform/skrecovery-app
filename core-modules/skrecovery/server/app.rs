@@ -78,16 +78,36 @@ fn main() -> io::Result<()> {
                     Scalar::zero() // dummy value, never getting read
                 }
             });
+ 
+            // turn replicated shares into (n, t) share of random hiding value
+            let mut random_hiding_shamir: Scalar = Scalar::zero();
+            
+            let other_parties = (0..num_parties - 1)
+                .map(|x| if x < rank as usize { x } else { x + 1 })
+                .collect::<Vec<usize>>();
+            let a_size = NUM_SERVERS - THRESHOLD;
 
-            // let f_A =
+            // for all sets A
+            for (i, mut v) in other_parties.iter().combinations(a_size - 1).enumerate() {
+                // determine fA: the (unique) degree-t polynomial such that: fA(0) = 1 
+                // and fA(i) = 0 for all i in [n] \ A
+                let r = rank as usize;
+                v.push(&r);
+                let mut f_A: Vec<&usize>;
+                // TODO: lagrange interpolate to get coeffs of f_A, fill in later or find library function
+                for j in 0..v.len() {
+                    // s = sum (rA * fA(j))
+                    //random_hiding_shamir = random_hiding_shamir + r_A[i] * f_A[j]; // TODO: fix syntax, idk how to get stuff out of r_A
+                }
+            }
             let my_share = debug_shares[rank as usize]
                 .as_field_element::<Scalar>()
                 .unwrap();
 
             // TODO check that all ids are the same maybe this isn't necessary
 
-            let random_scalar = Scalar::random(rng);
-            let field_to_write = (pwd_share - pwd_guess_share) * random_scalar + sk_share;
+            //let random_scalar = Scalar::random(rng);
+            let field_to_write = (pwd_share - pwd_guess_share) * random_hiding_shamir + sk_share;
             let mut result = vec![id];
             result.extend(field_to_write.to_bytes());
 
@@ -102,7 +122,7 @@ fn main() -> io::Result<()> {
                 .collect::<Vec<usize>>();
             println!("{:?}", other_parties);
             let a_size = NUM_SERVERS - THRESHOLD;
-            let my_prg_seed = rank as u64;
+            let my_prg_seed = rank as u64; // change later?
 
             // boy oh boy i hope this combinations thing is deterministic, because if it isn't everything breaks
             for (i, mut v) in other_parties.iter().combinations(a_size - 1).enumerate() {
@@ -119,19 +139,20 @@ fn main() -> io::Result<()> {
 
                 // TODO TODO TODO: 
                 // some issue with "writing to something that's not a socket"
-                let sender = v.iter().copied().sum::<usize>() % a_size; // index of the thing to be sent
+                //let sender = v.iter().copied().sum::<usize>() % a_size; // index of the thing to be sent
+                let sender = 0; // I think this also works bc the set elements are all in increasing order 
                 println!("{} {:?}, {}", rank, v, sender);
                 let mut out_file = &out_files[i];
                 if *v[sender] == rank as usize {
                     out_file.write_all(my_prg_seed.to_string().as_bytes())?;
                     for j in 0..a_size {
-                        if *v[j] != sender {
+                        if *v[j] != rank as usize {
                             socks[*v[j]].write_all(my_prg_seed.to_string().as_bytes())?;
                         }
                     }
                 } else {
                     let mut buf = [0u8; 8];
-                    socks[*v[sender]].read(&mut buf)?;
+                    socks[*v[sender]].read(&mut buf)?; //Possibly issue with synchronization around here
                     out_file.write_all(&buf)?;
                 }
             }

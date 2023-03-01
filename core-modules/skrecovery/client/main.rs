@@ -127,7 +127,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app_name = "rust_app";
 
-    let num_nodes = node_addrs.len();
     client.setup(node_addrs.to_vec(), None);
 
     match &cmd[..] {
@@ -135,7 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let in_files = [];
 
             let out_files = (0..6) // TODO: should be 4 choose 2
-                .map(|x| format!("{}_prg.txt", x))
+                .map(|x: u8| format!("{}_prg.txt", x))
                 .collect::<Vec<_>>();
 
             client
