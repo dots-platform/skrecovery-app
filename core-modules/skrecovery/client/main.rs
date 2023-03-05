@@ -134,7 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let in_files = [];
 
             let out_files = (0..6) // TODO: should be 4 choose 2
-                .map(|x: u8| format!("{}_prg.txt", x))
+                .map(|x: u8| format!("{}_prg.hex", x))
                 .collect::<Vec<_>>();
 
             client
@@ -194,7 +194,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let in_files = [
                 (0..NUM_A) // TODO: should be 4 choose 2
-                    .map(|x| format!("{}_prg.txt", x))
+                    .map(|x| format!("{}_prg.hex", x))
                     .collect::<Vec<_>>(),
                 [
                     id.to_owned() + "sk.txt",
@@ -205,8 +205,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ]
             .concat();
 
+            println!("{:?}", in_files);
+            // let out_files = [
+            //     (0..NUM_A) // TODO: should be 4 choose 2
+            //         .map(|x| format!("{}_prg.hex", x))
+            //         .collect::<Vec<_>>(),
+            //     [
+            //         id.to_owned() + "recovered_sk.txt"
+            //     ]
+            //     .into(),
+            // ]
+            // .concat();
             let out_files = [id.to_owned() + "recovered_sk.txt"];
-
             client
                 .exec(
                     app_name,
