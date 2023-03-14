@@ -1,9 +1,10 @@
 use std::env;
 
 use async_trait::async_trait;
-use blake2::{Blake2b512, Digest};
+use blake2::{Blake2s256, Digest};
+// use blake2::digest::{Update, Reset, VariableOutputReset};
 use dtrust::client::Client;
-use elliptic_curve::ff::PrimeField;
+use elliptic_curve::{ff::PrimeField};
 use p256::{NonZeroScalar, Scalar, SecretKey};
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
@@ -18,14 +19,14 @@ pub trait SecretKeyRecoverable {
     // Encrypt the secret key?
     // TODO get rid of num_nodes. I think threshold / num servers should be either read from somewhere ( serverconf.yaml? )
     // or defined in some `constants.rs`.
-    async fn upload_sk_and_pwd(&self, id: String, sk: String, pwd: String);
-    async fn upload_pwd_guess(&self, id: String, pwd_guess: String);
+    async fn upload_sk_and_pwd(&self, id: String, sk: String, pwd: String, hasher: &mut Blake2s256);
+    async fn upload_pwd_guess(&self, id: String, pwd_guess: String, hasher: &mut Blake2s256);
     async fn aggregate_sk(&self, id: String) -> Vec<u8>;
 }
 
 #[async_trait]
 impl SecretKeyRecoverable for Client {
-    async fn upload_sk_and_pwd(&self, id: String, sk: String, pwd: String) {
+    async fn upload_sk_and_pwd(&self, id: String, sk: String, pwd: String, hasher: &mut Blake2s256) {
         // TODO BIG: generate field elements from plaintext.
         let rng = &mut ChaCha20Rng::from_entropy();
         let sk_str = "AD302A6F48F74DD6F9D257F7149E4D06CD8936FE200AF67E08EF88D1CBA4525D";
@@ -44,8 +45,15 @@ impl SecretKeyRecoverable for Client {
         )
         .await;
 
-        let pwd_str = "1D46DC341A3190D7724B5692E77DEAA1CC02782980AFF034DB20289F4E5E3151";
-        let pwd_nzs = NonZeroScalar::from_str(&pwd_str).unwrap();
+        //let pwd_str = "1D46DC341A3190D7724B5692E77DEAA1CC02782980AFF034DB20289F4E5E3151";
+        // hasher.update(pwd.as_bytes());
+        // let mut buf = [0u8; 32]; 
+        // hasher.finalize_into_reset(GenericArray::from_mut_slice(&mut buf));
+        
+        // let pwd_uint = U256::from_be_bytes(buf);
+        // let pwd_nzs = NonZeroScalar::from_uint(pwd_uint).unwrap();
+        let pwd_nzs = util::string_hash_to_nzs(&pwd, hasher);
+        //let pwd_nzs = NonZeroScalar::from_str(&pwd).unwrap();
         let pwd_shares = Shamir::<THRESHOLD, NUM_SERVERS>::split_secret::<Scalar, ChaCha20Rng, 33>(
             *pwd_nzs.as_ref(),
             rng,
@@ -59,7 +67,7 @@ impl SecretKeyRecoverable for Client {
 
         // TODO: you wanna compress these into the same file? maybe take a look at serde, or maybe that's not necessary.
         // idgaf it's pretty inconsequential.
-        let salt = rng.gen::<[u8; 32]>();
+        /*let salt = rng.gen::<[u8; 32]>();
         let mut hasher = Blake2b512::new();
         hasher.update(salt);
         hasher.update(nzs.to_bytes());
@@ -67,17 +75,24 @@ impl SecretKeyRecoverable for Client {
         self.upload_blob(id.to_owned() + "skhash.txt", vec![res; NUM_SERVERS])
             .await;
         self.upload_blob(id.to_owned() + "salt.txt", vec![salt.to_vec(); NUM_SERVERS])
-            .await;
+            .await; */
     }
 
-    async fn upload_pwd_guess(&self, id: String, pwd_guess: String) {
+    async fn upload_pwd_guess(&self, id: String, pwd_guess: String, hasher: &mut Blake2s256) {
         let rng = &mut ChaCha20Rng::from_entropy();
-        let pwd_guess = NonZeroScalar::from_str(&pwd_guess).unwrap();
+        //let pwd_guess_nzs = NonZeroScalar::from_str(&pwd_guess).unwrap();
+        // hasher.update(pwd_guess.as_bytes());
+        // let mut buf = [0u8; 32]; 
+        // hasher.finalize_into_reset(GenericArray::from_mut_slice(&mut buf));
+        
+        // let pwd_guess_uint = U256::from_be_bytes(buf);
+        // let pwd_guess_nzs = NonZeroScalar::from_uint(pwd_guess_uint).unwrap();
+        let pwd_guess_nzs = util::string_hash_to_nzs(&pwd_guess, hasher);
         let pwd_guess_shares = Shamir::<{ THRESHOLD }, NUM_SERVERS>::split_secret::<
             Scalar,
             ChaCha20Rng,
             33,
-        >(*pwd_guess.as_ref(), rng)
+        >(*pwd_guess_nzs.as_ref(), rng)
         .unwrap();
         self.upload_blob(
             id.to_owned() + "guess.txt",
@@ -129,6 +144,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     client.setup(node_addrs.to_vec(), None);
 
+    let mut string_hasher = Blake2s256::new();
+
     match &cmd[..] {
         "seed_prgs" => {
             let in_files = [];
@@ -164,7 +181,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
             println!("Uploading sk {}, pwd {} for user {}", sk, pwd, id);
-            client.upload_sk_and_pwd(id, sk, pwd).await;
+            client.upload_sk_and_pwd(id, sk, pwd, &mut string_hasher).await;
         }
         "recover_sk" => {
             let id: String = match args[2].parse() {
@@ -183,7 +200,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             println!("Uploading guess ...");
             client
-                .upload_pwd_guess(String::from(&id), pwd_guess.clone())
+                .upload_pwd_guess(String::from(&id), pwd_guess.clone(), &mut string_hasher)
                 .await;
             println!("Guess uploaded");
 
