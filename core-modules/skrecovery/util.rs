@@ -8,11 +8,14 @@ pub const NUM_SERVERS: usize = 5;
 pub const NUM_A: usize = 6; // NUM_SERVERS - 1 choose (NUM_SERVERS - THRESHOLD - 1)
 
 pub fn string_hash_to_nzs(str: &str, hasher: &mut Blake2s256) -> NonZeroScalar {
+    // make string take up 256 bits by hashing
     hasher.update(str.as_bytes());
     let mut buf = [0u8; 32]; 
     hasher.finalize_into_reset(GenericArray::from_mut_slice(&mut buf));
     
+    // turn bytes into U256
     let str_uint = U256::from_be_bytes(buf);
+    // get field element from U256 (Uint for the P256 curve)
     let str_nzs = NonZeroScalar::from_uint(str_uint).unwrap();
     return str_nzs;
 }

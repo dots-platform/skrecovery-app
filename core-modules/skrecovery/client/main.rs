@@ -2,7 +2,6 @@ use std::env;
 
 use async_trait::async_trait;
 use blake2::{Blake2s256, Digest};
-// use blake2::digest::{Update, Reset, VariableOutputReset};
 use dtrust::client::Client;
 use elliptic_curve::{ff::PrimeField};
 use p256::{NonZeroScalar, Scalar, SecretKey};
@@ -45,15 +44,7 @@ impl SecretKeyRecoverable for Client {
         )
         .await;
 
-        //let pwd_str = "1D46DC341A3190D7724B5692E77DEAA1CC02782980AFF034DB20289F4E5E3151";
-        // hasher.update(pwd.as_bytes());
-        // let mut buf = [0u8; 32]; 
-        // hasher.finalize_into_reset(GenericArray::from_mut_slice(&mut buf));
-        
-        // let pwd_uint = U256::from_be_bytes(buf);
-        // let pwd_nzs = NonZeroScalar::from_uint(pwd_uint).unwrap();
         let pwd_nzs = util::string_hash_to_nzs(&pwd, hasher);
-        //let pwd_nzs = NonZeroScalar::from_str(&pwd).unwrap();
         let pwd_shares = Shamir::<THRESHOLD, NUM_SERVERS>::split_secret::<Scalar, ChaCha20Rng, 33>(
             *pwd_nzs.as_ref(),
             rng,
@@ -80,13 +71,6 @@ impl SecretKeyRecoverable for Client {
 
     async fn upload_pwd_guess(&self, id: String, pwd_guess: String, hasher: &mut Blake2s256) {
         let rng = &mut ChaCha20Rng::from_entropy();
-        //let pwd_guess_nzs = NonZeroScalar::from_str(&pwd_guess).unwrap();
-        // hasher.update(pwd_guess.as_bytes());
-        // let mut buf = [0u8; 32]; 
-        // hasher.finalize_into_reset(GenericArray::from_mut_slice(&mut buf));
-        
-        // let pwd_guess_uint = U256::from_be_bytes(buf);
-        // let pwd_guess_nzs = NonZeroScalar::from_uint(pwd_guess_uint).unwrap();
         let pwd_guess_nzs = util::string_hash_to_nzs(&pwd_guess, hasher);
         let pwd_guess_shares = Shamir::<{ THRESHOLD }, NUM_SERVERS>::split_secret::<
             Scalar,
@@ -144,6 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     client.setup(node_addrs.to_vec(), None);
 
+    // hash function to convert password string to 256-bit array, used to convert to field element
     let mut string_hasher = Blake2s256::new();
 
     match &cmd[..] {
