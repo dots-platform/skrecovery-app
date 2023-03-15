@@ -28,8 +28,8 @@ impl SecretKeyRecoverable for Client {
     async fn upload_sk_and_pwd(&self, id: String, sk: String, pwd: String) {
         // TODO BIG: generate field elements from plaintext.
         let rng = &mut ChaCha20Rng::from_entropy();
-        let sk_str = "AD302A6F48F74DD6F9D257F7149E4D06CD8936FE200AF67E08EF88D1CBA4525D";
-        let nzs = NonZeroScalar::from_str(&sk_str).unwrap();
+        //let sk_str = "AD302A6F48F74DD6F9D257F7149E4D06CD8936FE200AF67E08EF88D1CBA4525D";
+        let nzs = NonZeroScalar::from_str(&sk).unwrap();
 
         // 32 for field size, 1 for identifier = 33
         let res = Shamir::<THRESHOLD, NUM_SERVERS>::split_secret::<Scalar, ChaCha20Rng, 33>(
@@ -98,14 +98,14 @@ impl SecretKeyRecoverable for Client {
 
         let salts = self.retrieve_blob(id.to_owned() + "salt.txt").await;
         let hashes = self.retrieve_blob(id.to_owned() + "skhash.txt").await;
-        // // TODO Check that all salts and hashes are the same
+        // //Check that all salts and hashes are the same
 
-        let mut hasher = Blake2b512::new();
-        hasher.update(&salts[0]);
-        hasher.update(&sk.to_bytes());
-        let hash_result = hasher.finalize();
-        assert_eq!(hashes[0], hash_result.to_vec());
-        sk.to_bytes().to_vec()
+        if verify_sk_hash(salts, hashes, sk) {
+            sk.to_bytes().to_vec()
+        }
+        else {
+            Vec::new()
+        }
     }
 }
 
@@ -227,10 +227,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("Aggregating SK on client");
             let s = client.aggregate_sk(id).await;
+            if s.is_empty() {
+                println!("Recovered sk incorrect!");
+            } else {
+                let f = SecretKey::from_be_bytes(s.as_slice()).unwrap();
 
-            let f = SecretKey::from_be_bytes(s.as_slice()).unwrap();
-
-            println!("Recovered sk: {}", f.to_nonzero_scalar());
+                println!("Recovered sk: {}", f.to_nonzero_scalar());
+            }
         }
 
         _ => println!("Missing/wrong arguments"),

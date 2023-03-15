@@ -1,4 +1,4 @@
-use blake2::{Blake2s256, Digest};
+use blake2::{Blake2s256, Blake2b512, Digest};
 use p256::{NonZeroScalar, U256};
 use elliptic_curve::{generic_array::GenericArray, bigint::Encoding, subtle::ConstantTimeEq};
 
@@ -18,10 +18,23 @@ pub fn string_hash_to_nzs(str: &str) -> NonZeroScalar {
     let str_uint = U256::from_be_bytes(buf);
     // get field element from U256 (Uint for the P256 curve)
     let str_nzs = NonZeroScalar::from_uint(str_uint).unwrap();
-    return str_nzs;
+    str_nzs
 }
 
-#[test]
+//TODO: write test?
+pub fn verify_sk_hash(salts: Vec<Vec<u8>>, hashes: Vec<Vec<u8>>, sk: NonZeroScalar) -> bool {
+    let mut hasher = Blake2b512::new();
+    hasher.update(&salts[0]);
+    hasher.update(&sk.to_bytes());
+    let hash_result = hasher.finalize();
+    if hashes[0] != hash_result.to_vec() {
+        false
+    } else {
+        true
+    }
+}
+
+ #[test]
 fn test_string_hash_to_nzs() {
     let str1 = String::from("str1");
     let str2 = String::from("str2");
