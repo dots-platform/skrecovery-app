@@ -7,8 +7,9 @@ pub const NUM_SERVERS: usize = 5;
 // This constant is for the number of A's each individual server belongs to.
 pub const NUM_A: usize = 6; // NUM_SERVERS - 1 choose (NUM_SERVERS - THRESHOLD - 1)
 
-pub fn string_hash_to_nzs(str: &str, hasher: &mut Blake2s256) -> NonZeroScalar {
+pub fn string_hash_to_nzs(str: &str) -> NonZeroScalar {
     // make string take up 256 bits by hashing
+    let mut hasher = Blake2s256::new();
     hasher.update(str.as_bytes());
     let mut buf = [0u8; 32]; 
     hasher.finalize_into_reset(GenericArray::from_mut_slice(&mut buf));
@@ -24,10 +25,9 @@ pub fn string_hash_to_nzs(str: &str, hasher: &mut Blake2s256) -> NonZeroScalar {
 fn test_string_hash_to_nzs() {
     let str1 = String::from("str1");
     let str2 = String::from("str2");
-    let mut hasher = Blake2s256::new();
-    let nz1 = string_hash_to_nzs(&str1, &mut hasher);
-    let nz2 = string_hash_to_nzs(&str1, &mut hasher);
-    let nz3 = string_hash_to_nzs(&str2, &mut hasher);
+    let nz1 = string_hash_to_nzs(&str1);
+    let nz2 = string_hash_to_nzs(&str1);
+    let nz3 = string_hash_to_nzs(&str2);
 
     assert_eq!(nz1.ct_eq(&nz2).unwrap_u8(), 1);
     assert_eq!(nz1.ct_eq(&nz3).unwrap_u8(), 0);
