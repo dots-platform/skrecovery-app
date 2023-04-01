@@ -7,7 +7,6 @@ use elliptic_curve::{ff::PrimeField};
 use p256::{NonZeroScalar, Scalar, SecretKey};
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
-use std::str::FromStr;
 use vsss_rs::{Shamir, Share};
 
 #[path = "../util.rs"]
@@ -29,7 +28,7 @@ impl SecretKeyRecoverable for Client {
         // TODO BIG: generate field elements from plaintext.
         let rng = &mut ChaCha20Rng::from_entropy();
         //let sk_str = "AD302A6F48F74DD6F9D257F7149E4D06CD8936FE200AF67E08EF88D1CBA4525D";
-        let nzs = NonZeroScalar::from_str(&sk).unwrap();
+        let nzs = sk_pad_to_nzs(&sk);
 
         // 32 for field size, 1 for identifier = 33
         let res = Shamir::<THRESHOLD, NUM_SERVERS>::split_secret::<Scalar, ChaCha20Rng, 33>(
@@ -44,7 +43,7 @@ impl SecretKeyRecoverable for Client {
         )
         .await;
 
-        let pwd_nzs = util::string_hash_to_nzs(&pwd);
+        let pwd_nzs = string_hash_to_nzs(&pwd);
         let pwd_shares = Shamir::<THRESHOLD, NUM_SERVERS>::split_secret::<Scalar, ChaCha20Rng, 33>(
             *pwd_nzs.as_ref(),
             rng,
@@ -71,7 +70,7 @@ impl SecretKeyRecoverable for Client {
 
     async fn upload_pwd_guess(&self, id: String, pwd_guess: String) {
         let rng = &mut ChaCha20Rng::from_entropy();
-        let pwd_guess_nzs = util::string_hash_to_nzs(&pwd_guess);
+        let pwd_guess_nzs = string_hash_to_nzs(&pwd_guess);
         let pwd_guess_shares = Shamir::<{ THRESHOLD }, NUM_SERVERS>::split_secret::<
             Scalar,
             ChaCha20Rng,
@@ -93,15 +92,15 @@ impl SecretKeyRecoverable for Client {
         const RECOVER_THRESHOLD: usize = THRESHOLD;
         let res = Shamir::<4, NUM_SERVERS>::combine_shares::<Scalar, 33>(&sk_shares);
         assert!(res.is_ok());
-        let scalar = res.unwrap();
-        let sk = NonZeroScalar::from_repr(scalar.to_repr()).unwrap();
+        let sk_scalar = res.unwrap();
 
         let salts = self.retrieve_blob(id.to_owned() + "salt.txt").await;
         let hashes = self.retrieve_blob(id.to_owned() + "skhash.txt").await;
         // //Check that all salts and hashes are the same
 
-        if verify_sk_hash(salts, hashes, sk) {
-            sk.to_bytes().to_vec()
+        if verify_sk_hash(salts, hashes, sk_scalar) {
+            let sk_string = scalar_unpad_to_string(sk_scalar);
+            sk_string.as_bytes().to_vec()
         }
         else {
             Vec::new()
@@ -230,9 +229,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if s.is_empty() {
                 println!("Recovered sk incorrect!");
             } else {
-                let f = SecretKey::from_be_bytes(s.as_slice()).unwrap();
-
-                println!("Recovered sk: {}", f.to_nonzero_scalar());
+                let sk_string = String::from_utf8(s).unwrap();
+                println!("Recovered sk: {}", sk_string);
             }
         }
 

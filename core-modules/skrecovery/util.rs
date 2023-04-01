@@ -1,6 +1,7 @@
 use blake2::{Blake2s256, Blake2b512, Digest};
-use p256::{NonZeroScalar, U256};
-use elliptic_curve::{generic_array::GenericArray, bigint::Encoding, subtle::ConstantTimeEq};
+use p256::{NonZeroScalar, Scalar, U256};
+use elliptic_curve::{generic_array::{GenericArray, typenum::U32}, bigint::Encoding, subtle::ConstantTimeEq};
+use block_padding::{Pkcs7, Padding};
 
 pub const THRESHOLD: usize = 2;
 pub const NUM_SERVERS: usize = 5;
@@ -21,8 +22,33 @@ pub fn string_hash_to_nzs(str: &str) -> NonZeroScalar {
     str_nzs
 }
 
+pub fn sk_pad_to_nzs(str: &str) -> NonZeroScalar {
+    let sk_bytes = str.as_bytes();
+    println!("{:?}", sk_bytes);
+    // express string as blocks
+    // pad each block to 32 bytes
+    let pos = sk_bytes.len();
+    println!("{}", pos);
+    let mut block: GenericArray::<u8, U32> = [0u8; 32].into();
+    block[..pos].copy_from_slice(sk_bytes);
+    Pkcs7::pad(&mut block, pos);
+
+    // turn bytes into U256
+    let sk_uint = U256::from_be_bytes(block.into());
+    // get field element from U256 (Uint for the P256 curve)
+    let sk_nzs = NonZeroScalar::from_uint(sk_uint).unwrap();
+    sk_nzs
+}
+
+pub fn scalar_unpad_to_string(scalar: Scalar) -> String {
+    let bytes: GenericArray::<u8, U32> = scalar.to_bytes();
+    let res = Pkcs7::unpad(&bytes).unwrap();
+    let sk_string = String::from_utf8(res.to_vec()).unwrap();
+    sk_string
+}
+
 //TODO: write test?
-pub fn verify_sk_hash(salts: Vec<Vec<u8>>, hashes: Vec<Vec<u8>>, sk: NonZeroScalar) -> bool {
+pub fn verify_sk_hash(salts: Vec<Vec<u8>>, hashes: Vec<Vec<u8>>, sk: Scalar) -> bool {
     let mut hasher = Blake2b512::new();
     hasher.update(&salts[0]);
     hasher.update(&sk.to_bytes());
@@ -44,4 +70,12 @@ fn test_string_hash_to_nzs() {
 
     assert_eq!(nz1.ct_eq(&nz2).unwrap_u8(), 1);
     assert_eq!(nz1.ct_eq(&nz3).unwrap_u8(), 0);
+}
+
+#[test]
+fn test_sk_to_nzs() {
+    let sk1 = String::from("my_key");
+    let nz1 = sk_pad_to_nzs(&sk1);
+    let sk_recovered = scalar_unpad_to_string(*nz1.as_ref());
+    assert!(sk1 == sk_recovered);
 }
