@@ -1,10 +1,11 @@
 use std::env;
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use blake2::{Blake2b512, Digest};
 use dtrust::client::Client;
-use elliptic_curve::{ff::PrimeField};
-use p256::{NonZeroScalar, Scalar, SecretKey};
+use p256::Scalar;
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 use vsss_rs::{Shamir, Share};
@@ -25,21 +26,31 @@ pub trait SecretKeyRecoverable {
 #[async_trait]
 impl SecretKeyRecoverable for Client {
     async fn upload_sk_and_pwd(&self, id: String, sk: String, pwd: String) {
-        // TODO BIG: generate field elements from plaintext.
         let rng = &mut ChaCha20Rng::from_entropy();
-        //let sk_str = "AD302A6F48F74DD6F9D257F7149E4D06CD8936FE200AF67E08EF88D1CBA4525D";
-        let nzs = sk_pad_to_nzs(&sk);
-
-        // 32 for field size, 1 for identifier = 33
-        let res = Shamir::<THRESHOLD, NUM_SERVERS>::split_secret::<Scalar, ChaCha20Rng, 33>(
-            *nzs.as_ref(),
-            rng,
-        )
-        .unwrap();
+        let field_elts = sk_to_field_elts(&sk);
+        let mut shares_vec = Vec::new();
+        for _ in 0..NUM_SERVERS {
+            shares_vec.push(Vec::new());
+        }
+        for nzs in field_elts.as_slice() {
+            // 32 for field size, 1 for identifier = 33
+            let res = Shamir::<THRESHOLD, NUM_SERVERS>::split_secret::<Scalar, ChaCha20Rng, 33>(
+                *nzs.as_ref(),
+                rng,
+            )
+            .unwrap();
+            for i in 0..NUM_SERVERS {
+                shares_vec[i].push(res[i]);
+            }
+        }
+        let mut upload_vec = Vec::new();
+        for i in 0..NUM_SERVERS {
+            upload_vec.push(serde_json::to_vec(&shares_vec[i]).unwrap());
+        }
 
         self.upload_blob(
             id.to_owned() + "sk.txt",
-            res.map(|x| x.as_ref().to_vec()).to_vec(),
+            upload_vec,
         )
         .await;
 
@@ -60,7 +71,9 @@ impl SecretKeyRecoverable for Client {
         let salt = rng.gen::<[u8; 32]>();
         let mut hasher = Blake2b512::new();
         hasher.update(salt);
-        hasher.update(nzs.to_bytes());
+        for nzs in field_elts.as_slice() {
+            hasher.update(nzs.to_bytes());
+        }
         let res = hasher.finalize().to_vec();
         self.upload_blob(id.to_owned() + "skhash.txt", vec![res; NUM_SERVERS])
             .await;
@@ -87,24 +100,36 @@ impl SecretKeyRecoverable for Client {
         let sk_byte_shares = self.retrieve_blob(id.to_owned() + "recovered_sk.txt").await;
         let sk_byte_shares = sk_byte_shares.iter().map(|x| x.as_slice());
         let mut sk_shares = Vec::new();
-        sk_byte_shares.for_each(|x| sk_shares.push(Share::try_from(x).unwrap()));
+        sk_byte_shares.for_each(|x| {
+            let shares_vec: Vec<Vec<u8>> = serde_json::from_slice(x).unwrap();
+            sk_shares.push(shares_vec);
+        });
         // get back (2t, n) shares bc of multiplication
         const RECOVER_THRESHOLD: usize = THRESHOLD;
-        let res = Shamir::<4, NUM_SERVERS>::combine_shares::<Scalar, 33>(&sk_shares);
-        assert!(res.is_ok());
-        let sk_scalar = res.unwrap();
+        let num_chunks = sk_shares[0].len();
+        let mut sk_scalars = Vec::new();
+        for i in 0..num_chunks {
+            let mut scalars = Vec::new();
+            for vec in sk_shares.as_slice() {
+                scalars.push(Share::try_from(vec[i].as_slice()).unwrap());
+            }
+            let res = Shamir::<4, NUM_SERVERS>::combine_shares::<Scalar, 33>(&scalars);
+            assert!(res.is_ok());
+            let sk_scalar = res.unwrap();
+            sk_scalars.push(sk_scalar);
+        }
 
         let salts = self.retrieve_blob(id.to_owned() + "salt.txt").await;
         let hashes = self.retrieve_blob(id.to_owned() + "skhash.txt").await;
-        // //Check that all salts and hashes are the same
+        //Check that all salts and hashes are the same
 
-        if verify_sk_hash(salts, hashes, sk_scalar) {
-            let sk_string = scalar_unpad_to_string(sk_scalar);
-            sk_string.as_bytes().to_vec()
+        if verify_sk_hash(salts, hashes, sk_scalars.as_slice()) {
+            field_elts_to_string(sk_scalars.as_slice()).into_bytes().to_vec()
         }
         else {
             Vec::new()
         }
+        
     }
 }
 
@@ -131,8 +156,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "seed_prgs" => {
             let in_files = [];
 
-            let out_files = (0..6) // TODO: should be 4 choose 2
-                .map(|x: u8| format!("{}_prg.hex", x))
+            let out_files = (0..NUM_A) // TODO: should be 4 choose 2
+                .map(|x| format!("{}_prg.hex", x))
                 .collect::<Vec<_>>();
 
             client

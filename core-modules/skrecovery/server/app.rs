@@ -1,5 +1,5 @@
 use dtrust::utils::init_app;
-use itertools::{Combinations, Itertools};
+use itertools::Itertools;
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 use std::io;
@@ -13,9 +13,9 @@ use std::net::TcpStream;
 mod util;
 use util::{NUM_SERVERS, THRESHOLD, NUM_A};
 
-use elliptic_curve::{ff::PrimeField, generic_array::GenericArray, Field, ops::Reduce};
-use p256::{NonZeroScalar, Scalar, SecretKey, U256};
-use vsss_rs::{Shamir, Share};
+use elliptic_curve::{Field, ops::Reduce};
+use p256::{Scalar, U256};
+use vsss_rs::Share;
 
 fn generate_a(num_parties: usize, a_size: usize, rank: usize) -> Vec<Vec<usize>> {
     let other_parties = (0..num_parties - 1)
@@ -64,7 +64,15 @@ fn main() -> io::Result<()> {
         "skrecovery" => {
             // compute R(PW-PWG) share locally
             
-            let shares = in_files[NUM_A..]
+            let shares_file = &in_files[NUM_A..];
+            let mut sk_shares_file = &shares_file[0];
+            let mut buf = Vec::new();
+            if sk_shares_file.read_to_end(&mut buf).is_err() {
+                panic!("Error reading file");
+            }
+            let sk_shares: Vec<Share<33>> = serde_json::from_slice(buf.as_slice()).unwrap();
+
+            let pwd_shares = shares_file[1..]
                 .iter()
                 .map(|mut f| {
                     let mut buf = Vec::new();
@@ -75,11 +83,9 @@ fn main() -> io::Result<()> {
                     (share.identifier(), share.as_field_element().unwrap())
                 })
                 .collect::<Vec<(u8, Scalar)>>();
-
-            let id = shares[0].0;
-            let sk_share = shares[0].1;
-            let pwd_share = shares[1].1;
-            let pwd_guess_share = shares[2].1;
+            
+            let pwd_share = pwd_shares[0].1;
+            let pwd_guess_share = pwd_shares[1].1;
 
             // Thanks Emma for showing us this neat trick!
             // https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=96317e8e38cc956da308026e5328948ebd9d49ad
@@ -119,15 +125,20 @@ fn main() -> io::Result<()> {
             // TODO check that all ids are the same maybe this isn't necessary
 
             //let random_scalar = Scalar::random(rng);
-            let field_to_write = (pwd_share - pwd_guess_share) * my_share + sk_share;
-            let mut result = vec![id];
-            result.extend(field_to_write.to_bytes());
+            let mut result_vec = Vec::new();
+            for sk_share in sk_shares {
+                let id = sk_share.identifier();
+                let share: Scalar = sk_share.as_field_element().unwrap();
+                let field_to_write = (pwd_share - pwd_guess_share) * my_share + share;
+                let mut result = vec![id];
+                result.extend(field_to_write.to_bytes());
+                result_vec.push(result);
+            }
 
-            // assert_eq!(out_files.len(), NUM_A + 1);
-            // let mut out_file = &out_files[NUM_A];
+            let result_vec_to_write = serde_json::to_vec(&result_vec).unwrap();
             assert_eq!(out_files.len(), 1);
             let mut out_file = &out_files[0];        
-            out_file.write_all(&result)?;
+            out_file.write_all(result_vec_to_write.as_slice())?;
 
 
             Ok(())
