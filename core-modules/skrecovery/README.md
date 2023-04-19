@@ -11,10 +11,10 @@ Users can upload their secret key along with a password which can be used to rec
 Our protocol includes two phases: key registraion and key recovery. The examples below show the case where there are `N=2` servers; however our code supports any arbitrary number of servers.
 
 ### Key Registration
-The user uploads secret key shards and password shards independently to each server.
+The user uploads Shamir secret shares of secret key and password independently to each server.
 ![registration](assets/README-b0262.png)
 ### Key Recovery
-The user uploads password guess shards independently to each server. The servers communicate to perform an MPC and verify if the password guess was correct. A separate beaver triple server provides beaver triples to the servers that are needed for the MPC circuit.
+The user uploads password guess shards independently to each server. The servers communicate to perform an MPC and verify if the password guess was correct. ~~A separate beaver triple server provides beaver triples to the servers that are needed for the MPC circuit.~~
 ![recovery](assets/README-c3945.png)
 
 ### MPC
@@ -68,6 +68,10 @@ cargo run --bin rust_app
 
 ### 3. Commands
 In another terminal, execute the following commands to register/recover secret keys.
+#### Initialize seeds to use for key recovery step
+```bash
+$ cargo run --bin client seed_prgs
+```
 #### Upload a secret key and password
 ```bash
 $ cargo run --bin client upload_sk_and_pwd my_id my_sk my_pwd
