@@ -105,7 +105,7 @@ impl SecretKeyRecoverable for Client {
             sk_shares.push(shares_vec);
         });
         // get back (2t, n) shares bc of multiplication
-        const RECOVER_THRESHOLD: usize = THRESHOLD;
+        const RECOVER_THRESHOLD: usize = THRESHOLD*2;
         let num_chunks = sk_shares[0].len();
         let mut sk_scalars = Vec::new();
         for i in 0..num_chunks {
@@ -113,7 +113,7 @@ impl SecretKeyRecoverable for Client {
             for vec in sk_shares.as_slice() {
                 scalars.push(Share::try_from(vec[i].as_slice()).unwrap());
             }
-            let res = Shamir::<4, NUM_SERVERS>::combine_shares::<Scalar, 33>(&scalars);
+            let res = Shamir::<RECOVER_THRESHOLD, NUM_SERVERS>::combine_shares::<Scalar, 33>(&scalars);
             assert!(res.is_ok());
             let sk_scalar = res.unwrap();
             sk_scalars.push(sk_scalar);
