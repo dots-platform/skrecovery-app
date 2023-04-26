@@ -1,6 +1,5 @@
 use std::env;
 
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use blake2::{Blake2b512, Digest};
@@ -13,124 +12,113 @@ use vsss_rs::{Shamir, Share};
 #[path = "../util.rs"]
 mod util;
 use util::*;
-#[async_trait]
-pub trait SecretKeyRecoverable {
-    // Encrypt the secret key?
-    // TODO get rid of num_nodes. I think threshold / num servers should be either read from somewhere ( serverconf.yaml? )
-    // or defined in some `constants.rs`.
-    async fn upload_sk_and_pwd(&self, id: String, sk: String, pwd: String);
-    async fn upload_pwd_guess(&self, id: String, pwd_guess: String);
-    async fn aggregate_sk(&self, id: String) -> Vec<u8>;
-}
 
-#[async_trait]
-impl SecretKeyRecoverable for Client {
-    async fn upload_sk_and_pwd(&self, id: String, sk: String, pwd: String) {
-        let rng = &mut ChaCha20Rng::from_entropy();
-        let field_elts = sk_to_field_elts(&sk);
-        let mut shares_vec = Vec::new();
-        for _ in 0..NUM_SERVERS {
-            shares_vec.push(Vec::new());
-        }
-        for nzs in field_elts.as_slice() {
-            // 32 for field size, 1 for identifier = 33
-            let res = Shamir::<THRESHOLD, NUM_SERVERS>::split_secret::<Scalar, ChaCha20Rng, 33>(
-                *nzs.as_ref(),
-                rng,
-            )
-            .unwrap();
-            for i in 0..NUM_SERVERS {
-                shares_vec[i].push(res[i]);
-            }
-        }
-        let mut upload_vec = Vec::new();
-        for i in 0..NUM_SERVERS {
-            upload_vec.push(serde_json::to_vec(&shares_vec[i]).unwrap());
-        }
-
-        self.upload_blob(
-            id.to_owned() + "sk.txt",
-            upload_vec,
-        )
-        .await;
-
-        let pwd_nzs = string_hash_to_nzs(&pwd);
-        let pwd_shares = Shamir::<THRESHOLD, NUM_SERVERS>::split_secret::<Scalar, ChaCha20Rng, 33>(
-            *pwd_nzs.as_ref(),
+async fn upload_sk_and_pwd(client: &mut Client, id: String, sk: String, pwd: String) {
+    let rng = &mut ChaCha20Rng::from_entropy();
+    let field_elts = sk_to_field_elts(&sk);
+    let mut shares_vec = Vec::new();
+    for _ in 0..NUM_SERVERS {
+        shares_vec.push(Vec::new());
+    }
+    for nzs in field_elts.as_slice() {
+        // 32 for field size, 1 for identifier = 33
+        let res = Shamir::<THRESHOLD, NUM_SERVERS>::split_secret::<Scalar, ChaCha20Rng, 33>(
+            *nzs.as_ref(),
             rng,
         )
         .unwrap();
-        self.upload_blob(
-            id.to_owned() + "pwd.txt",
-            pwd_shares.map(|x| x.as_ref().to_vec()).to_vec(),
-        )
+        for i in 0..NUM_SERVERS {
+            shares_vec[i].push(res[i]);
+        }
+    }
+    let mut upload_vec = Vec::new();
+    for i in 0..NUM_SERVERS {
+        upload_vec.push(serde_json::to_vec(&shares_vec[i]).unwrap());
+    }
+
+    client.upload_blob(
+        id.to_owned() + "sk.txt",
+        upload_vec,
+    )
+    .await;
+
+    let pwd_nzs = string_hash_to_nzs(&pwd);
+    let pwd_shares = Shamir::<THRESHOLD, NUM_SERVERS>::split_secret::<Scalar, ChaCha20Rng, 33>(
+        *pwd_nzs.as_ref(),
+        rng,
+    )
+    .unwrap();
+    client.upload_blob(
+        id.to_owned() + "pwd.txt",
+        pwd_shares.map(|x| x.as_ref().to_vec()).to_vec(),
+    )
+    .await;
+
+    // TODO: you wanna compress these into the same file? maybe take a look at serde, or maybe that's not necessary.
+    // idgaf it's pretty inconsequential.
+    let salt = rng.gen::<[u8; 32]>();
+    let mut hasher = Blake2b512::new();
+    hasher.update(salt);
+    for nzs in field_elts.as_slice() {
+        hasher.update(nzs.to_bytes());
+    }
+    let res = hasher.finalize().to_vec();
+    client.upload_blob(id.to_owned() + "skhash.txt", vec![res; NUM_SERVERS])
         .await;
-
-        // TODO: you wanna compress these into the same file? maybe take a look at serde, or maybe that's not necessary.
-        // idgaf it's pretty inconsequential.
-        let salt = rng.gen::<[u8; 32]>();
-        let mut hasher = Blake2b512::new();
-        hasher.update(salt);
-        for nzs in field_elts.as_slice() {
-            hasher.update(nzs.to_bytes());
-        }
-        let res = hasher.finalize().to_vec();
-        self.upload_blob(id.to_owned() + "skhash.txt", vec![res; NUM_SERVERS])
-            .await;
-        self.upload_blob(id.to_owned() + "salt.txt", vec![salt.to_vec(); NUM_SERVERS])
-            .await;
-    }
-
-    async fn upload_pwd_guess(&self, id: String, pwd_guess: String) {
-        let rng = &mut ChaCha20Rng::from_entropy();
-        let pwd_guess_nzs = string_hash_to_nzs(&pwd_guess);
-        let pwd_guess_shares = Shamir::<{ THRESHOLD }, NUM_SERVERS>::split_secret::<
-            Scalar,
-            ChaCha20Rng,
-            33,
-        >(*pwd_guess_nzs.as_ref(), rng)
-        .unwrap();
-        self.upload_blob(
-            id.to_owned() + "guess.txt",
-            pwd_guess_shares.map(|x| x.as_ref().to_vec()).to_vec(),
-        )
+    client.upload_blob(id.to_owned() + "salt.txt", vec![salt.to_vec(); NUM_SERVERS])
         .await;
-    }
-    async fn aggregate_sk(&self, id: String) -> Vec<u8> {
-        let sk_byte_shares = self.retrieve_blob(id.to_owned() + "recovered_sk.txt").await;
-        let sk_byte_shares = sk_byte_shares.iter().map(|x| x.as_slice());
-        let mut sk_shares = Vec::new();
-        sk_byte_shares.for_each(|x| {
-            let shares_vec: Vec<Vec<u8>> = serde_json::from_slice(x).unwrap();
-            sk_shares.push(shares_vec);
-        });
-        // get back (2t, n) shares bc of multiplication
-        const RECOVER_THRESHOLD: usize = THRESHOLD*2;
-        let num_chunks = sk_shares[0].len();
-        let mut sk_scalars = Vec::new();
-        for i in 0..num_chunks {
-            let mut scalars = Vec::new();
-            for vec in sk_shares.as_slice() {
-                scalars.push(Share::try_from(vec[i].as_slice()).unwrap());
-            }
-            let res = Shamir::<RECOVER_THRESHOLD, NUM_SERVERS>::combine_shares::<Scalar, 33>(&scalars);
-            assert!(res.is_ok());
-            let sk_scalar = res.unwrap();
-            sk_scalars.push(sk_scalar);
-        }
+}
 
-        let salts = self.retrieve_blob(id.to_owned() + "salt.txt").await;
-        let hashes = self.retrieve_blob(id.to_owned() + "skhash.txt").await;
-        //Check that all salts and hashes are the same
+async fn upload_pwd_guess(client: &mut Client, id: String, pwd_guess: String) {
+    let rng = &mut ChaCha20Rng::from_entropy();
+    let pwd_guess_nzs = string_hash_to_nzs(&pwd_guess);
+    let pwd_guess_shares = Shamir::<{ THRESHOLD }, NUM_SERVERS>::split_secret::<
+        Scalar,
+        ChaCha20Rng,
+        33,
+    >(*pwd_guess_nzs.as_ref(), rng)
+    .unwrap();
+    client.upload_blob(
+        id.to_owned() + "guess.txt",
+        pwd_guess_shares.map(|x| x.as_ref().to_vec()).to_vec(),
+    )
+    .await;
+}
 
-        if verify_sk_hash(salts, hashes, sk_scalars.as_slice()) {
-            field_elts_to_string(sk_scalars.as_slice()).into_bytes().to_vec()
+async fn aggregate_sk(client: &mut Client, id: String) -> Vec<u8> {
+    let sk_byte_shares = client.retrieve_blob(id.to_owned() + "recovered_sk.txt").await;
+    let sk_byte_shares = sk_byte_shares.iter().map(|x| x.as_slice());
+    let mut sk_shares = Vec::new();
+    sk_byte_shares.for_each(|x| {
+        let shares_vec: Vec<Vec<u8>> = serde_json::from_slice(x).unwrap();
+        sk_shares.push(shares_vec);
+    });
+    // get back (2t, n) shares bc of multiplication
+    const RECOVER_THRESHOLD: usize = THRESHOLD*2;
+    let num_chunks = sk_shares[0].len();
+    let mut sk_scalars = Vec::new();
+    for i in 0..num_chunks {
+        let mut scalars = Vec::new();
+        for vec in sk_shares.as_slice() {
+            scalars.push(Share::try_from(vec[i].as_slice()).unwrap());
         }
-        else {
-            Vec::new()
-        }
-        
+        let res = Shamir::<RECOVER_THRESHOLD, NUM_SERVERS>::combine_shares::<Scalar, 33>(&scalars);
+        assert!(res.is_ok());
+        let sk_scalar = res.unwrap();
+        sk_scalars.push(sk_scalar);
     }
+
+    let salts = client.retrieve_blob(id.to_owned() + "salt.txt").await;
+    let hashes = client.retrieve_blob(id.to_owned() + "skhash.txt").await;
+    //Check that all salts and hashes are the same
+
+    if verify_sk_hash(salts, hashes, sk_scalars.as_slice()) {
+        field_elts_to_string(sk_scalars.as_slice()).into_bytes().to_vec()
+    }
+    else {
+        Vec::new()
+    }
+    
 }
 
 #[tokio::main]
@@ -187,7 +175,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
             println!("Uploading sk {}, pwd {} for user {}", sk, pwd, id);
-            client.upload_sk_and_pwd(id, sk, pwd).await;
+            upload_sk_and_pwd(&mut client, id, sk, pwd).await;
         }
         "recover_sk" => {
             let id: String = match args[2].parse() {
@@ -205,8 +193,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
             println!("Uploading guess ...");
-            client
-                .upload_pwd_guess(String::from(&id), pwd_guess.clone())
+            upload_pwd_guess(&mut client, String::from(&id), pwd_guess.clone())
                 .await;
             println!("Guess uploaded");
 
@@ -250,7 +237,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .await?;
 
             println!("Aggregating SK on client");
-            let s = client.aggregate_sk(id).await;
+            let s = aggregate_sk(&mut client, id).await;
             if s.is_empty() {
                 println!("Recovered sk incorrect!");
             } else {
