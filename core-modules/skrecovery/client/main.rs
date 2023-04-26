@@ -149,7 +149,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .collect::<Vec<_>>();
 
             client
-                .exec(app_name, "seed_prgs", in_files.to_vec(), out_files.to_vec())
+                .exec(app_name, "seed_prgs", in_files.to_vec(), out_files.to_vec(), vec![])
                 .await?;
         }
         "upload_sk_and_pwd" => {
@@ -233,6 +233,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "skrecovery",
                     in_files.to_vec(),
                     out_files.to_vec(),
+                    vec![],
                 )
                 .await?;
 

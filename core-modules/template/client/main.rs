@@ -41,7 +41,7 @@ impl SecretKeyStorage for Client {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let use_tls: bool = true;
+    let use_tls: bool = false;
     let node_addrs =
         if use_tls == true {
             ["https://node1.test:50051", "https://node2.test:50052", "https://node3.test:50053"]
@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let in_files = [String::from("sk")];
 
     let cli_id = "user1";
-    let app_name = "rust_app";
+    let app_name = "cpp_app";
     let func_name = "";
     let mut client = Client::new(cli_id);
     
