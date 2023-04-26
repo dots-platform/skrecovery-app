@@ -1,4 +1,3 @@
-mod dec_exec;
 mod client;
 
 use client::Client;
@@ -15,7 +14,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     client.setup(node_addrs.to_vec(), None);
     client.upload_blob(String::from("blob"), vec![vec![]]).await;
-    client.exec(app_name, func_name, in_files.to_vec(), [String::from("out.txt")].to_vec()).await?;
+    client.exec(app_name, func_name, in_files.to_vec(), [String::from("out.txt")].to_vec(), vec![]).await?;
     client.retrieve_blob(String::from("blob")).await;
     
     Ok(())

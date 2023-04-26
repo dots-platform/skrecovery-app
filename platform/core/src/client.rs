@@ -1,8 +1,10 @@
-use crate::dec_exec::dec_exec_client::DecExecClient;
-use crate::dec_exec::{App, Blob};
+use dotspb::dec_exec::dec_exec_client::DecExecClient;
+use dotspb::dec_exec;
+use dotspb::dec_exec::{App, Blob};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 
 use tokio::task;
+use uuid::Uuid;
 use futures::future::join_all;
 
 pub struct Client {
@@ -52,12 +54,14 @@ impl Client {
         blobs
     }
 
-    pub async fn exec(&self, app_name: &'static str, func_name: &'static str, in_files: Vec<String>, out_files: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn exec(&self, app_name: &'static str, func_name: &'static str, in_files: Vec<String>, out_files: Vec<String>, args: Vec<Vec<u8>>) -> Result<(), Box<dyn std::error::Error>> {
 
         let mut futures = vec![];
 
+        let request_id = uuid::Uuid::new_v4();
+
         for node_addr in &self.node_addrs {
-            let fut = task::spawn(Client::exec_single(self.client_id.clone(), node_addr.clone(), self.ca_cert_filepath.clone(), app_name, func_name, in_files.clone(), out_files.clone()));
+            let fut = task::spawn(Client::exec_single(request_id, self.client_id.clone(), node_addr.clone(), self.ca_cert_filepath.clone(), app_name, func_name, in_files.clone(), out_files.clone(), args.clone()));
             futures.push(fut);
         }
 
@@ -116,8 +120,11 @@ impl Client {
         Ok(response.into_inner().val)
     }
 
-    async fn exec_single(cli_id: &'static str, node_addr: &'static str, ca_cert_filepath: Option<&'static str>, app_name: &'static str, func_name: &'static str, in_files: Vec<String>, out_files: Vec<String>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn exec_single(request_id: Uuid, cli_id: &'static str, node_addr: &'static str, ca_cert_filepath: Option<&'static str>, app_name: &'static str, func_name: &'static str, in_files: Vec<String>, out_files: Vec<String>, args: Vec<Vec<u8>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut client = Self::connect_to_server(node_addr, ca_cert_filepath).await?;
+
+        let request_id_hi = u64::from_be_bytes(request_id.as_bytes()[..8].try_into().unwrap());
+        let request_id_lo = u64::from_be_bytes(request_id.as_bytes()[8..].try_into().unwrap());
 
         let request = tonic::Request::new(App {
             app_name: app_name.into(),
@@ -125,7 +132,12 @@ impl Client {
             func_name: func_name.into(),
             in_files: in_files,
             out_files: out_files,
-            client_id: cli_id.to_string()
+            client_id: cli_id.to_string(),
+            request_id: Some(dec_exec::Uuid {
+                hi: request_id_hi,
+                lo: request_id_lo,
+            }),
+            args: args,
         });
 
         let response = client.exec(request).await?;
