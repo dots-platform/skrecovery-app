@@ -1,13 +1,8 @@
-use dtrust::utils::init_app;
 use itertools::Itertools;
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
-use std::io;
+use std::error::Error;
 use std::io::prelude::*;
-
-// TODO: move this field choice into a config somewhere. Also, put the number of nodes in this config
-// Also the file names we use for client/server communication.
-use std::net::TcpStream;
 
 #[path = "../util.rs"]
 mod util;
@@ -53,12 +48,16 @@ fn test_n_sub_a() {
     let a = vec![0, 4, 5];
     assert_eq!(n_sub_a(n, a), vec![1,2,3]);
 }
-fn main() -> io::Result<()> {
-    let (rank, func_name, in_files, out_files, mut socks) = init_app()?;
+fn main() -> Result<(), Box<dyn Error>> {
+    libdots::env::init()?;
+
+    let rank = libdots::env::get_world_rank();
+    let num_parties = libdots::env::get_world_size();
+    let func_name = libdots::env::get_func_name();
+    let in_files = libdots::env::get_in_files();
+    let out_files = libdots::env::get_out_files();
 
     println!("rank {} starting", rank);
-
-    let num_parties = socks.len();
 
     match &func_name[..] {
         "skrecovery" => {
@@ -91,7 +90,7 @@ fn main() -> io::Result<()> {
             // https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=96317e8e38cc956da308026e5328948ebd9d49ad
 
             let a_size = NUM_SERVERS - THRESHOLD;
-            let my_as = generate_a(num_parties, a_size, rank as usize);
+            let my_as = generate_a(num_parties, a_size, rank);
             let r_a = (0..NUM_A).map(|i| {
                 let mut buf = Vec::new();
                 let mut prg_file = &in_files[i];
@@ -116,7 +115,7 @@ fn main() -> io::Result<()> {
                 let mut fa_j = Scalar::one();
                 let factors = n_sub_a(num_parties, a.to_vec());
                 for f in factors {
-                    fa_j *= Scalar::from_uint_reduced(U256::from(rank)) - Scalar::from_uint_reduced(U256::from(f as u8));
+                    fa_j *= Scalar::from_uint_reduced(U256::from(rank as u32)) - Scalar::from_uint_reduced(U256::from(f as u8));
                 }
                 fa_j + Scalar::one()
             });
@@ -158,12 +157,12 @@ fn main() -> io::Result<()> {
                     out_file.write_all(&my_prg_seed.to_le_bytes())?;
                     for j in 0..a_size {
                         if v[j] != rank as usize {
-                            socks[v[j]].write_all(&my_prg_seed.to_le_bytes())?;
+                            libdots::msg::send(&my_prg_seed.to_le_bytes(), v[j], 0)?;
                         }
                     }
                 } else {
                     let mut buf = [0u8; 8];
-                    socks[v[sender]].read_exact(&mut buf)?; 
+                    libdots::msg::recv(&mut buf, v[sender], 0)?;
                     out_file.write_all(&buf)?;
                 }
             }
