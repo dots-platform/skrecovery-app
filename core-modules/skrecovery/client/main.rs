@@ -136,7 +136,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli_id = "user1";
     let mut client = Client::new(cli_id);
 
-    let app_name = "rust_app";
+    let app_name = "skrecovery";
 
     client.setup(node_addrs.to_vec(), None);
 
