@@ -1,87 +1,165 @@
-# Berkeley DoTS: The Berkeley Decentralized Trust Stack
+# Secret Key Recovery
+**Group Members**: Allison Li, Michael Ren, Yuwen Zhang \
+**Google slide presentation**: [Link to slides](https://docs.google.com/presentation/d/1u1Br2Mme98Wht2vrZYd0OYpvr5GDZNZZfiXFLk-RHWU/edit?usp=sharing)
 
-***Caveat: This codebase is currently close-sourced. We plan to have it open-sourced at the end of the class. Until then, please do not distribute this repo to anyone outside this class.***
+## What it is
+The SK recovery module provides a framework for a secret key recovery protocol distributed across multiple nodes. \
+Users can upload their secret key along with a password which can be used to recover the secret key. These pieces of data are sharded on the client side before being uploaded to any servers.\
+ When a user wants to recover their key, they can submit a password guess. Each server gets a shard of the guess, and then they perform an MPC to verify if the password is correct. If so, they send their shards of the secret key back to the user.
 
-Distributing trust has become a fundamental principle in building many of today's applications. However, developing and deploying distributed applications remained challenging. Berkeley Dots is a platform for users to easily develop, test, and deploy applications with distributed trust. Here are some example real-world applications with distributed trust that can be built from Berkeley Dots:
+## Design and Architecture
+Our protocol includes two phases: key registraion and key recovery. The examples below show the case where there are `N=2` servers; however our code supports any arbitrary number of servers.
 
-### Cryptocurrency wallet custody
-People claim ownership to crypto assets and authorize transactions using private keys. If these keys are lost, then the user permanently lose access to their assets. To protect these private keys, cryptocurrency custody service (e.g. Fireblocks) distribute the keys to multiple servers. Each server holds a secret share of the key, and the servers jointly run secure multi-party computation to authorize transactions with the key.
+### Key Registration
+The user uploads Shamir secret shares of secret key and password independently to each server.
+![registration](assets/README-b0262.png)
+### Key Recovery
+The user uploads password guess shards independently to each server. The servers communicate to perform an MPC and verify if the password guess was correct. ~~A separate beaver triple server provides beaver triples to the servers that are needed for the MPC circuit.~~
+![recovery](assets/README-c3945.png)
 
-### Federated blockchain bridges.
-Blockchain bridges enable users to transfer crypto assets or data between two different chains. A federated bridge distributes trust among a committee of stakeholders, who jointly facilitates the transfer of funds. A user that wants to transfer fund to another blockchain would first lock his assets from the source chain into the bridge. The committee then runs an MPC algorithm to jointly produce a minting signature. The user can use this signature to claim a respective token on the destination chain.
+### MPC
+The specific MPC that the server's calculate is outlined below. The sharding scheme shown is additive.
+* If the password guess is correct, the circuit evaluates to the secret key.
+* If the password guess is incorrect, the circuit evaluates to a random value.
+![mpc](assets/README-7e7ab.png)
 
-### Distributed PKI
-A Distributed Public key infrastructure (PKI) logs clients' public keys on multiple servers. These servers jointly maintain a consistent global view of users' public key. A user can check if his public key is not tampered with by comparing if the public keys stored on these servers are equal to each other.
+## Module Design
+We use [arkworks](https://github.com/arkworks-rs/algebra) for the finite-field arithmetic used in the MPC. Since the MPC circuit itself is quite simple, we chose to compute the circuit discretely rather than relying on a separate MPC library such as MP-SPDZ. We chose arkworks because members of our group already had prior experience with the library and we knew its capabilities would be sufficient for our project.
+For our client-server model, we bootstrap off the initial template provided in `core-modules/pki`.
+
+## Threat Model
+Under the assumption that Alice shards her secret key into `N` shares:
+* Servers are semi-honest: compromised servers will still faithfully execute the protocol.
+* There are no more than `N-1` colluding MPC servers.
+* DOS attacks are not possible.
+
+If these requirements are met, then it is guaranteed that Alice can recover her secret key, and an attacker who doesn't know Alice's password can recover Alice's secret key with negligible probability.
 
 
-### Collaborative learning/analytics.
-Multiple organizations (e.g. banks, hospitals) wants to jointly train a ML model or performing analytics using their sensitive data. They can use MPC to run collaborative learning/analytics without revealing their sensitive data to each other.
-
-
-## Getting Started
-Our platform can run on MacOS and Linux. Windows is currently not supported.
-
-### 1. Installing Protocol Buffer Compiler
-First, make sure `protoc` is installed on your machine, and its version is 3+. If not, follow [https://grpc.io/docs/protoc-installation/](https://grpc.io/docs/protoc-installation/) to install it.
-
-On linux:
-```bash
-$ apt install -y protobuf-compiler
-$ protoc --version  # Ensure compiler version is 3+
-```
-On MacOS, using Homebrew:
-```bash
-$ brew install protobuf
-$ protoc --version  # Ensure compiler version is 3+
-```
-
-### 2. Installing Rust
-Follow the instruction on [https://www.rust-lang.org/tools/install](https://www.rust-lang.org/tools/install) to install Rust on your machine.
-
-### 3. Initializing decentralized nodes
-First, we need to initialize the DTrust platform on multiple servers. We can use the `init_server` command to initialize a private node on a server. The `init_server` command takes a `node_id` and config file (`server_conf.yml`) as input, and initialize the node according to the config. The bash script below will initialize two servers with `node1` and `node2` as their `node_id` respectively.  You need to open two terminals to execute the following commands.
-
-On terminal 1:
-```bash
-./platform/init_server --node_id node1 --config ./core-modules/pki/server_conf_tcp.yml
-```
-
-On terminal 2:
-```bash
-./platform/init_server --node_id node2 --config ./core-modules/pki/server_conf_tcp.yml
-```
-You can alternatively initialize the nodes to establish tls connections by following the instructions at [docs/tls.md](docs/tls.md)
-
-### 4. Running an example application
-The `core-modules/pki` folder contains an example application called distributed PKI (public key infrastructure) written in Rust. This app enables a client to store his public key on multiple nodes. Other clients who want to talk to this client can then retrieve the public key from these servers. To run the client, open a another terminal and type in the following commands.
+# Running the program
+All commands should be executed from the `skrecovery` module: `cd core-modules/skrecovery` from the dtrust root.
+### 0. Install Dependencies
+Install all the non-Cargo packages outlined in the [Dependencies](#dependencies) section. Cargo packages can be installed like so:
 
 ```bash
-cd core-modules/pki
 cargo build
-cargo run --bin client "upload_pk" "user1" "random_public_key"
-cargo run --bin client "recover_pk" "user1"
 ```
 
-You should see the message: "recovered public-key: "random_public_key"" at the bottom of your screen.
+### 1. Setup Nodes
+#### 1.1 Server Configuration
+First configure the server nodes in `server_conf.yml`. Any number of servers can be added. The default configuration runs with three servers; the first `N-1` servers are always MPC servers, and the last server is always the beaver triple server.
+
+#### 1.2 Client Configuration
+In `client/main.rs:93` add the addresses of all the servers in `server_conf.yml` to the `node_addrs` list.
+
+#### 1.3 Start Nodes
+
+Run the following command in one terminal.
+```bash
+./start_servers.sh
+```
 
 
-## Workflow of a decentralized application
-The BDots platform consists of a client and multiple decentralized nodes (servers). The client interacts with the nodes through gRPC requests. BDots provide network connections between these servers, handles file storage, and offers common crypto primitives (under development) for applications built on top of the platform. Below is a diagram that outline the overall architecture of BDots. 
-<img src="imgs/arch.png"  width="500" title="Employee Data title">
+### 2. Start the client server
+Start the client in another terminal.
+```bash
+cargo run --bin rust_app
+```
 
-A typical decentralized application consists of the following steps:
-1. A client performs some local pre-computation, and uploads the results of the pre-computations to the servers. The pre-computation results are stored as files on the servers.
-2. The client initiates a request to execute a decentralized app remotely on the servers. The servers take the input files as specified by the client, jointly executes the decentralized app, and stores the results to output files specified by the client.
-3. The client downloads the results from the servers, and performs some post-computation on the results locally.
+### 3. Commands
+In another terminal, execute the following commands to register/recover secret keys.
+#### Initialize seeds to use for key recovery step
+```bash
+$ cargo run --bin client seed_prgs
+```
+#### Upload a secret key and password
+```bash
+$ cargo run --bin client upload_sk_and_pwd my_id my_sk my_pwd
+```
+#### Recover the secret key with a password guess
+```bash
+$ cargo run --bin client recover_sk my_id my_pwd
+```
 
-The above workflow only provides a general guideline for developing decentralized applications. A decentralized application does not need to follow these steps exactly. Each step is separate and composable from each other, and can be optional depending on the specific application you are building. For example, an app that does secret-key recovery does not have any server side computations, so it can skip step 2.
+# Dependencies
+See `Cargo.toml` for dependencies and `Cargo.lock` for the specific versions.
+The following other dependencies should be preinstalled on the system as well. Provided version numbers are the ones that we ran on, but other versions may work as well.
+* [rustc](https://www.rust-lang.org/tools/install) 1.65.0 (897e37553 2022-11-02)
+* [yq](https://github.com/mikefarah/yq/) 4.30.5
+* [grpcio](https://pypi.org/project/grpcio/) 1.51.1
 
-# Docs
-To learn more about the BDoTS platform as well as this example application, checkout our [tutorial](docs/client_apps.md) . They will equip you with the necessary knowledge to develop your own decentralized applications on BDoTS.
+# Tests
+* `utils.rs` contains two functions `test_shard()` and `test_shard_to_bytes()` which can be used to verify the behavior of their respective functions. 
+* We also tested the server by running the code ourselves and feeding it correct and incorrect password guesses.
 
-We add a [second tutorial](docs/server_apps.md) specifically on how to develop server-side applications. Check it out if your project has server-side functionalities.
+## Upload secret key and password
+```bash
+$ cargo run --bin client upload_sk_and_pwd client_id 1234567890 client_pwd
+Finished dev [unoptimized + debuginfo] target(s) in 0.09s
+Running `target/debug/client upload_sk_and_pwd client_id 1234567890 client_pwd`
+Uploading sk 1234567890, pwd client_pwd for user client_id
+sk_field: Fp256 "(00000000000000000000000000000000000000000000000000000000499602D2)"
+RESPONSE=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Result { result: "success" }, extensions: Extensions }
+RESPONSE=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Result { result: "success" }, extensions: Extensions }
+RESPONSE=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Result { result: "success" }, extensions: Extensions }
+Results: [Ok(Ok(())), Ok(Ok(())), Ok(Ok(()))]
+pwd_field: Fp256 "(000000000000000000000000000000000000000000006477705F746E65696C63)"
+RESPONSE=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Result { result: "success" }, extensions: Extensions }
+RESPONSE=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Result { result: "success" }, extensions: Extensions }
+RESPONSE=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Result { result: "success" }, extensions: Extensions }
+Results: [Ok(Ok(())), Ok(Ok(())), Ok(Ok(()))]
+```
 
-For toggling between TLS and TCP between clients and servers, see [here](docs/tls.md).
+## Terminal output from a correct guess
+```bash
+$ cargo run --bin client recover_sk client_id client_pwd
+Finished dev [unoptimized + debuginfo] target(s) in 0.12s
+Running `target/debug/client recover_sk client_id client_pwd`
+Uploading guess ...
+RESPONSE=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Result { result: "success" }, extensions: Extensions }
+RESPONSE=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Result { result: "success" }, extensions: Extensions }
+RESPONSE=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Result { result: "success" }, extensions: Extensions }
+Results: [Ok(Ok(())), Ok(Ok(())), Ok(Ok(()))]
+Guess uploaded
+Recovering sk with pwd guess Fp256 "(000000000000000000000000000000000000000000006477705F746E65696C63)", for user client_id
+RESPONSE=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Result { result: "success" }, extensions: Extensions }
+RESPONSE=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Result { result: "success" }, extensions: Extensions }
+RESPONSE=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Result { result: "success" }, extensions: Extensions }
+Results: [Ok(Ok(())), Ok(Ok(())), Ok(Ok(()))]
+Aggregating SK on client
+Blob=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Blob { key: "client_idrecovered_sk.txt", val: [], client_id: "" }, extensions: Extensions }
+Blob=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Blob { key: "client_idrecovered_sk.txt", val: [75, 168, 74, 148, 242, 186, 53, 137, 227, 237, 225, 235, 69, 207, 116, 76, 124, 247, 114, 250, 9, 57, 55, 162, 4, 49, 41, 139, 250, 127, 45, 86], client_id: "" }, extensions: Extensions }
+Blob=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Blob { key: "client_idrecovered_sk.txt", val: [136, 90, 75, 181, 12, 69, 202, 118, 27, 110, 28, 20, 189, 212, 72, 7, 137, 224, 46, 15, 254, 158, 2, 145, 67, 76, 116, 158, 88, 39, 192, 29], client_id: "" }, extensions: Extensions }
+Blobs: [[75, 168, 74, 148, 242, 186, 53, 137, 227, 237, 225, 235, 69, 207, 116, 76, 124, 247, 114, 250, 9,57, 55, 162, 4, 49, 41, 139, 250, 127, 45, 86], [136, 90, 75, 181, 12, 69, 202, 118, 27, 110, 28, 20, 189, 212, 72, 7, 137, 224, 46, 15, 254, 158, 2, 145, 67, 76, 116, 158, 88, 39, 192, 29], []]
+Recovered sk: Fp256 "(00000000000000000000000000000000000000000000000000000000499602D2)"
+```
 
-# Join our Discord channels
-If you have any questions or want to hear about our latest updates, come join our [discord](https://discord.gg/uVVyTFDpXV) channel.
+## Terminal output from an incorrect guess
+```bash
+$ cargo run --bin client recover_sk client_id client_WRONG_pwd
+Finished dev [unoptimized + debuginfo] target(s) in 0.10s
+Running `target/debug/client recover_sk client_id client_WRONG_pwd`
+Uploading guess ...
+RESPONSE=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Result { result: "success" }, extensions: Extensions }
+RESPONSE=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Result { result: "success" }, extensions: Extensions }
+RESPONSE=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Result { result: "success" }, extensions: Extensions }
+Results: [Ok(Ok(())), Ok(Ok(())), Ok(Ok(()))]
+Guess uploaded
+Recovering sk with pwd guess Fp256 "(000000000000000000000000000000006477705F474E4F52575F746E65696C63)", for user client_id
+RESPONSE=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Result { result: "success" }, extensions: Extensions }
+RESPONSE=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Result { result: "success" }, extensions: Extensions }
+RESPONSE=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Result { result: "success" }, extensions: Extensions }
+Results: [Ok(Ok(())), Ok(Ok(())), Ok(Ok(()))]
+Aggregating SK on client
+Blob=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Blob { key: "client_idrecovered_sk.txt", val: [], client_id: "" }, extensions: Extensions }
+Blob=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Blob { key: "client_idrecovered_sk.txt", val: [230, 126, 252, 220, 181, 49, 38, 248, 182, 60, 54, 122, 234, 97, 174, 230, 33, 92, 176, 134, 227, 0, 195, 188, 71, 44, 58, 166, 72, 71, 53, 96], client_id: "" }, extensions: Extensions }
+Blob=Response { metadata: MetadataMap { headers: {"content-type": "application/grpc", "grpc-accept-encoding": "identity, deflate, gzip", "grpc-status": "0"} }, message: Blob { key: "client_idrecovered_sk.txt", val: [114, 211, 175, 154, 115, 98, 116, 230, 247, 29, 167, 43, 67, 132, 111, 161, 199, 118, 0, 31, 207, 124,85, 116, 250, 8, 236, 10, 174, 234, 69, 57], client_id: "" }, extensions: Extensions }
+Blobs: [[230, 126, 252, 220, 181, 49, 38, 248, 182, 60, 54, 122, 234, 97, 174, 230, 33, 92, 176, 134, 227,0, 195, 188, 71, 44, 58, 166, 72, 71, 53, 96], [114, 211, 175, 154, 115, 98, 116, 230, 247, 29, 167, 43, 67, 132, 111, 161, 199, 118, 0, 31, 207, 124, 85, 116, 250, 8, 236, 10, 174, 234, 69, 57], []]
+Recovered sk: Fp256 "(258D8AA38788B7F9FDDEA5AA9C0EFAE43460422AA5DEFEAFDE9A942A77AC5257)"
+```
+
+# Future work
+* Evaluate performance as the number of participating servers / shards increases.
+* Add signatures to all messages between client/server and server/server. This would improve our threat model to protection against malicious attackers rather than semi-honest ones. Some work has already been done in this direction. See `core-modules/signing` for the current progress.
+* Integrate TLS for secure network communication between client/server and server/server
+* Use oblivious transfer or homomorphic encryption to securely generate beaver triples without the need for a discrete beaver triple server.
