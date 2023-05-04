@@ -1,7 +1,5 @@
 use std::env;
 
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use blake2::{Blake2b512, Digest};
 use dtrust::client::Client;
 use p256::Scalar;
@@ -13,7 +11,7 @@ use vsss_rs::{Shamir, Share};
 mod util;
 use util::*;
 
-async fn upload_sk_and_pwd(client: &mut Client, id: String, sk: String, pwd: String) {
+async fn upload_sk_and_pwd(client: &mut Client, id: &str, sk: &str, pwd: &str) {
     let rng = &mut ChaCha20Rng::from_entropy();
     let field_elts = sk_to_field_elts(&sk);
     let mut shares_vec = Vec::new();
@@ -69,7 +67,7 @@ async fn upload_sk_and_pwd(client: &mut Client, id: String, sk: String, pwd: Str
         .await;
 }
 
-async fn upload_pwd_guess(client: &mut Client, id: String, pwd_guess: String) {
+async fn upload_pwd_guess(client: &mut Client, id: &str, pwd_guess: &str) {
     let rng = &mut ChaCha20Rng::from_entropy();
     let pwd_guess_nzs = string_hash_to_nzs(&pwd_guess);
     let pwd_guess_shares = Shamir::<{ THRESHOLD }, NUM_SERVERS>::split_secret::<
@@ -85,7 +83,7 @@ async fn upload_pwd_guess(client: &mut Client, id: String, pwd_guess: String) {
     .await;
 }
 
-async fn aggregate_sk(client: &mut Client, id: String) -> Vec<u8> {
+async fn aggregate_sk(client: &mut Client, id: &str) -> Vec<u8> {
     let sk_byte_shares = client.retrieve_blob(id.to_owned() + "recovered_sk.txt").await;
     let sk_byte_shares = sk_byte_shares.iter().map(|x| x.as_slice());
     let mut sk_shares = Vec::new();
@@ -153,47 +151,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .await?;
         }
         "upload_sk_and_pwd" => {
-            let id: String = match args[2].parse() {
-                Ok(s) => s,
-                Err(_) => {
-                    eprintln!("error: user-id not a string");
-                    panic!("");
-                }
-            };
-            let sk: String = match args[3].parse() {
-                Ok(s) => s,
-                Err(_) => {
-                    eprintln!("error: sk not a string");
-                    panic!("");
-                }
-            };
-            let pwd: String = match args[4].parse() {
-                Ok(s) => s,
-                Err(_) => {
-                    eprintln!("error: pwd not a string");
-                    panic!("");
-                }
-            };
+            let id = &args[2];
+            let sk = &args[3];
+            let pwd = &args[4];
             println!("Uploading sk {}, pwd {} for user {}", sk, pwd, id);
             upload_sk_and_pwd(&mut client, id, sk, pwd).await;
         }
         "recover_sk" => {
-            let id: String = match args[2].parse() {
-                Ok(s) => s,
-                Err(_) => {
-                    eprintln!("error: user-id not a string");
-                    panic!("");
-                }
-            };
-            let pwd_guess = match args[3].parse::<String>() {
-                Ok(s) => s,
-                Err(_) => {
-                    eprintln!("error: pwd guess not a string");
-                    panic!("");
-                }
-            };
+            let id = &args[2];
+            let pwd_guess = &args[3];
             println!("Uploading guess ...");
-            upload_pwd_guess(&mut client, String::from(&id), pwd_guess.clone())
+            upload_pwd_guess(&mut client, id, pwd_guess)
                 .await;
             println!("Guess uploaded");
 
