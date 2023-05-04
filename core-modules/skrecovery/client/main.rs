@@ -1,4 +1,6 @@
 use std::env;
+use std::error::Error;
+use std::iter;
 
 use blake2::{Blake2b512, Digest};
 use dtrust::client::Client;
@@ -11,7 +13,9 @@ use vsss_rs::{Shamir, Share};
 mod util;
 use util::*;
 
-async fn upload_sk_and_pwd(client: &mut Client, id: &str, sk: &str, pwd: &str) {
+const APP_NAME: &str = "skrecovery";
+
+async fn upload_sk_and_pwd(client: &mut Client, id: &str, sk: &str, pwd: &str) -> Result<(), Box<dyn Error>> {
     let rng = &mut ChaCha20Rng::from_entropy();
     let field_elts = sk_to_field_elts(&sk);
     let mut shares_vec = Vec::new();
@@ -29,28 +33,20 @@ async fn upload_sk_and_pwd(client: &mut Client, id: &str, sk: &str, pwd: &str) {
             shares_vec[i].push(res[i]);
         }
     }
-    let mut upload_vec = Vec::new();
-    for i in 0..NUM_SERVERS {
-        upload_vec.push(serde_json::to_vec(&shares_vec[i]).unwrap());
-    }
-
-    client.upload_blob(
-        id.to_owned() + "sk.txt",
-        upload_vec,
-    )
-    .await;
+    let sk_shares: Vec<Vec<u8>> = shares_vec
+        .iter()
+        .map(|share| serde_json::to_vec(share).unwrap())
+        .collect();
 
     let pwd_nzs = string_hash_to_nzs(&pwd);
-    let pwd_shares = Shamir::<THRESHOLD, NUM_SERVERS>::split_secret::<Scalar, ChaCha20Rng, 33>(
+    let pwd_shares: Vec<Vec<u8>> = Shamir::<THRESHOLD, NUM_SERVERS>::split_secret::<Scalar, ChaCha20Rng, 33>(
         *pwd_nzs.as_ref(),
         rng,
     )
-    .unwrap();
-    client.upload_blob(
-        id.to_owned() + "pwd.txt",
-        pwd_shares.map(|x| x.as_ref().to_vec()).to_vec(),
-    )
-    .await;
+        .unwrap()
+        .iter()
+        .map(|share| share.as_ref().to_vec())
+        .collect();
 
     // TODO: you wanna compress these into the same file? maybe take a look at serde, or maybe that's not necessary.
     // idgaf it's pretty inconsequential.
@@ -60,14 +56,21 @@ async fn upload_sk_and_pwd(client: &mut Client, id: &str, sk: &str, pwd: &str) {
     for nzs in field_elts.as_slice() {
         hasher.update(nzs.to_bytes());
     }
-    let res = hasher.finalize().to_vec();
-    client.upload_blob(id.to_owned() + "skhash.txt", vec![res; NUM_SERVERS])
-        .await;
-    client.upload_blob(id.to_owned() + "salt.txt", vec![salt.to_vec(); NUM_SERVERS])
-        .await;
+    let hash = hasher.finalize().to_vec();
+
+    client.exec(APP_NAME,
+                "upload_sk_and_pwd",
+                vec![],
+                vec![],
+                iter::zip(sk_shares, pwd_shares)
+                    .map(|(sk_share, pwd_share)| vec![id.as_bytes().to_owned(), sk_share, pwd_share, salt.to_vec(), hash.clone()])
+                    .collect())
+        .await?;
+
+    Ok(())
 }
 
-async fn upload_pwd_guess(client: &mut Client, id: &str, pwd_guess: &str) {
+fn compute_pwd_guess(pwd_guess: &str) -> Vec<Vec<u8>> {
     let rng = &mut ChaCha20Rng::from_entropy();
     let pwd_guess_nzs = string_hash_to_nzs(&pwd_guess);
     let pwd_guess_shares = Shamir::<{ THRESHOLD }, NUM_SERVERS>::split_secret::<
@@ -76,21 +79,17 @@ async fn upload_pwd_guess(client: &mut Client, id: &str, pwd_guess: &str) {
         33,
     >(*pwd_guess_nzs.as_ref(), rng)
     .unwrap();
-    client.upload_blob(
-        id.to_owned() + "guess.txt",
-        pwd_guess_shares.map(|x| x.as_ref().to_vec()).to_vec(),
-    )
-    .await;
+    pwd_guess_shares.map(|x| x.as_ref().to_vec()).to_vec()
 }
 
-async fn aggregate_sk(client: &mut Client, id: &str) -> Vec<u8> {
-    let sk_byte_shares = client.retrieve_blob(id.to_owned() + "recovered_sk.txt").await;
-    let sk_byte_shares = sk_byte_shares.iter().map(|x| x.as_slice());
-    let mut sk_shares = Vec::new();
-    sk_byte_shares.for_each(|x| {
-        let shares_vec: Vec<Vec<u8>> = serde_json::from_slice(x).unwrap();
-        sk_shares.push(shares_vec);
-    });
+fn aggregate_sk(outputs: &[&[u8]]) -> Vec<u8> {
+    let deserialized: Vec<(Vec<Vec<u8>>, Vec<u8>, Vec<u8>)> = outputs
+        .iter()
+        .map(|x| serde_json::from_slice::<(Vec<Vec<u8>>, Vec<u8>, Vec<u8>)>(x).unwrap())
+        .collect();
+    let sk_shares: Vec<&[Vec<u8>]> = deserialized.iter().map(|x| x.0.as_slice()).collect();
+    let salts: Vec<&[u8]> = deserialized.iter().map(|x| x.1.as_slice()).collect();
+    let hashes: Vec<&[u8]> = deserialized.iter().map(|x| x.2.as_slice()).collect();
     // get back (2t, n) shares bc of multiplication
     const RECOVER_THRESHOLD: usize = THRESHOLD*2;
     let num_chunks = sk_shares[0].len();
@@ -106,11 +105,9 @@ async fn aggregate_sk(client: &mut Client, id: &str) -> Vec<u8> {
         sk_scalars.push(sk_scalar);
     }
 
-    let salts = client.retrieve_blob(id.to_owned() + "salt.txt").await;
-    let hashes = client.retrieve_blob(id.to_owned() + "skhash.txt").await;
     //Check that all salts and hashes are the same
 
-    if verify_sk_hash(salts, hashes, sk_scalars.as_slice()) {
+    if verify_sk_hash(&salts, &hashes, sk_scalars.as_slice()) {
         field_elts_to_string(sk_scalars.as_slice()).into_bytes().to_vec()
     }
     else {
@@ -131,23 +128,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "http://127.0.0.1:50055",
     ];
 
-    let cli_id = "user1";
+    let cli_id = "";
     let mut client = Client::new(cli_id);
-
-    let app_name = "skrecovery";
 
     client.setup(node_addrs.to_vec(), None);
 
     match &cmd[..] {
         "seed_prgs" => {
-            let in_files = [];
-
-            let out_files = (0..NUM_A) // TODO: should be 4 choose 2
-                .map(|x| format!("{}_prg.hex", x))
-                .collect::<Vec<_>>();
-
             client
-                .exec(app_name, "seed_prgs", in_files.to_vec(), out_files.to_vec(), vec![vec![]; NUM_A])
+                .exec(APP_NAME, "seed_prgs", vec![], vec![], vec![vec![]; NUM_A])
                 .await?;
         }
         "upload_sk_and_pwd" => {
@@ -155,58 +144,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let sk = &args[3];
             let pwd = &args[4];
             println!("Uploading sk {}, pwd {} for user {}", sk, pwd, id);
-            upload_sk_and_pwd(&mut client, id, sk, pwd).await;
+            upload_sk_and_pwd(&mut client, id, sk, pwd).await?;
         }
         "recover_sk" => {
             let id = &args[2];
             let pwd_guess = &args[3];
-            println!("Uploading guess ...");
-            upload_pwd_guess(&mut client, id, pwd_guess)
-                .await;
-            println!("Guess uploaded");
 
             println!(
                 "Recovering sk with pwd guess {}, for user {}",
                 pwd_guess, id
             );
 
-            let in_files = [
-                (0..NUM_A) // TODO: should be 4 choose 2
-                    .map(|x| format!("{}_prg.hex", x))
-                    .collect::<Vec<_>>(),
-                [
-                    id.to_owned() + "sk.txt",
-                    id.to_owned() + "pwd.txt",
-                    id.to_owned() + "guess.txt",
-                ]
-                .into(),
-            ]
-            .concat();
+            let pwd_guess_shares = compute_pwd_guess(pwd_guess);
 
-            println!("{:?}", in_files);
-            // let out_files = [
-            //     (0..NUM_A) // TODO: should be 4 choose 2
-            //         .map(|x| format!("{}_prg.hex", x))
-            //         .collect::<Vec<_>>(),
-            //     [
-            //         id.to_owned() + "recovered_sk.txt"
-            //     ]
-            //     .into(),
-            // ]
-            // .concat();
-            let out_files = [id.to_owned() + "recovered_sk.txt"];
-            client
+            let responses = client
                 .exec(
-                    app_name,
+                    APP_NAME,
                     "skrecovery",
-                    in_files.to_vec(),
-                    out_files.to_vec(),
-                    vec![vec![]; NUM_A],
+                    vec![],
+                    vec![],
+                    pwd_guess_shares
+                        .into_iter()
+                        .map(|pwd_guess_share| vec![id.as_bytes().to_owned(), pwd_guess_share])
+                        .collect()
                 )
                 .await?;
+            let outputs: Vec<&[u8]> = responses
+                .iter()
+                .map(|res| res.output.as_slice())
+                .collect();
 
             println!("Aggregating SK on client");
-            let s = aggregate_sk(&mut client, id).await;
+            let s = aggregate_sk(&outputs);
             if s.is_empty() {
                 println!("Recovered sk incorrect!");
             } else {

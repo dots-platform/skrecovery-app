@@ -2,6 +2,8 @@ use itertools::Itertools;
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 use std::error::Error;
+use std::fs::File;
+use std::io::Error as IoError;
 use std::io::prelude::*;
 
 #[path = "../util.rs"]
@@ -54,37 +56,40 @@ fn main() -> Result<(), Box<dyn Error>> {
     let rank = libdots::env::get_world_rank();
     let num_parties = libdots::env::get_world_size();
     let func_name = libdots::env::get_func_name();
-    let in_files = libdots::env::get_in_files();
-    let out_files = libdots::env::get_out_files();
+    let args = libdots::env::get_args();
 
     println!("rank {} starting", rank);
 
     match &func_name[..] {
+        "upload_sk_and_pwd" => {
+            let user_id = String::from_utf8(args[0].clone())
+                .expect("User ID is not UTF-8 encoded");
+            let sk_shares = &args[1];
+            let pwd_share = &args[2];
+            let salt = &args[3];
+            let skhash = &args[4];
+
+            File::create(format!("{}sk.txt", &user_id))?.write_all(sk_shares)?;
+            File::create(format!("{}pwd.txt", &user_id))?.write_all(pwd_share)?;
+            File::create(format!("{}skhash.txt", &user_id))?.write_all(skhash)?;
+            File::create(format!("{}salt.txt", &user_id))?.write_all(salt)?;
+
+            Ok(())
+        },
         "skrecovery" => {
+            let user_id = String::from_utf8(args[0].clone())
+                .expect("User ID is not UTF-8 encoded");
+
             // compute R(PW-PWG) share locally
             
-            let shares_file = &in_files[NUM_A..];
-            let mut sk_shares_file = &shares_file[0];
             let mut buf = Vec::new();
-            if sk_shares_file.read_to_end(&mut buf).is_err() {
-                panic!("Error reading file");
-            }
-            let sk_shares: Vec<Share<33>> = serde_json::from_slice(buf.as_slice()).unwrap();
+            File::open(format!("{}sk.txt", user_id))?.read_to_end(&mut buf)?;
+            let sk_shares: Vec<Share<33>> = serde_json::from_slice(&buf)?;
 
-            let pwd_shares = shares_file[1..]
-                .iter()
-                .map(|mut f| {
-                    let mut buf = Vec::new();
-                    if f.read_to_end(&mut buf).is_err() {
-                        panic!("Error reading file");
-                    }
-                    let share = Share::<33>::try_from(buf.as_slice()).unwrap();
-                    (share.identifier(), share.as_field_element().unwrap())
-                })
-                .collect::<Vec<(u8, Scalar)>>();
-            
-            let pwd_share = pwd_shares[0].1;
-            let pwd_guess_share = pwd_shares[1].1;
+            let mut buf = Vec::new();
+            File::open(format!("{}pwd.txt", user_id))?.read_to_end(&mut buf)?;
+            let pwd_share: Scalar = Share::<33>::try_from(buf.as_slice())?.as_field_element().unwrap();
+            let pwd_guess_share: Scalar = Share::<33>::try_from(args[1].as_ref())?.as_field_element().unwrap();
 
             // Thanks Emma for showing us this neat trick!
             // https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=96317e8e38cc956da308026e5328948ebd9d49ad
@@ -93,12 +98,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             let my_as = generate_a(num_parties, a_size, rank);
             let r_a = (0..NUM_A).map(|i| {
                 let mut buf = Vec::new();
-                let mut prg_file = &in_files[i];
-                let e = prg_file.read_to_end(&mut buf);
-                println!("prg file {:?}", prg_file.metadata().unwrap().len());
-                if e.is_err() {
-                    panic!("Error reading prg seed {}, {}", i, e.unwrap_err());
-                }
+                let mut prg_file = File::open(format!("{}_prg.hex", i))?;
+                prg_file.read_to_end(&mut buf)?;
                 let curr_seed = u64::from_le_bytes([0u8; 8]); // CHANGE
                 let rng = ChaCha20Rng::seed_from_u64(curr_seed);
                 // let next_seed = rng.gen::<u64>();
@@ -108,8 +109,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 //     panic!("Error writing new prg seed {}", i)
                 // }
                 // assert!(prg_out_file.flush().is_ok());
-                Scalar::random(rng)
-            });
+                Ok(Scalar::random(rng))
+            }).collect::<Result<Vec<Scalar>, IoError>>()?;
 
             let f_a = my_as.iter().map(|a| {
                 let mut fa_j = Scalar::one();
@@ -134,11 +135,19 @@ fn main() -> Result<(), Box<dyn Error>> {
                 result_vec.push(result);
             }
 
-            let result_vec_to_write = serde_json::to_vec(&result_vec).unwrap();
-            assert_eq!(out_files.len(), 1);
-            let mut out_file = &out_files[0];        
-            out_file.write_all(result_vec_to_write.as_slice())?;
+            let salt = {
+                let mut buf = vec![];
+                File::open(format!("{}salt.txt", user_id))?.read_to_end(&mut buf)?;
+                buf
+            };
+            let skhash = {
+                let mut buf = vec![];
+                File::open(format!("{}skhash.txt", user_id))?.read_to_end(&mut buf)?;
+                buf
+            };
 
+            let result_vec_to_output = serde_json::to_vec(&(result_vec, salt, skhash)).unwrap();
+            libdots::output::output(&result_vec_to_output)?;
 
             Ok(())
         }
@@ -148,7 +157,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             for (i, v) in generate_a(num_parties, a_size, rank as usize).iter().enumerate() {
                 let sender = 0; // I think this also works bc the set elements are all in increasing order 
                 println!("{} {:?}, {}", rank, v, sender);
-                let mut out_file = &out_files[i ];
+                let mut out_file = File::create(format!("{}_prg.hex", i))?;
                 let my_prg_seed = (v[0] * 256 + v[1] * 16 + v[2]) as u64; // change later?
 
                 println!("{}", my_prg_seed.to_le_bytes().len());

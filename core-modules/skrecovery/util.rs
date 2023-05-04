@@ -55,7 +55,7 @@ pub fn field_elts_to_string(scalars: &[Scalar]) -> String {
 }
 
 //TODO: write test?
-pub fn verify_sk_hash(salts: Vec<Vec<u8>>, hashes: Vec<Vec<u8>>, sk_vec: &[Scalar]) -> bool {
+pub fn verify_sk_hash(salts: &[&[u8]], hashes: &[&[u8]], sk_vec: &[Scalar]) -> bool {
     let mut hasher = Blake2b512::new();
     for i in 0..hashes.len() {
         hasher.update(&salts[i]);
