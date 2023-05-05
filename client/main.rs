@@ -123,11 +123,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     let cmd = &args[1];
     let node_addrs = [
+        "http://127.0.0.1:50050",
         "http://127.0.0.1:50051",
         "http://127.0.0.1:50052",
         "http://127.0.0.1:50053",
         "http://127.0.0.1:50054",
-        "http://127.0.0.1:50055",
     ];
 
     let cli_id = "";
