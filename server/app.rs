@@ -6,6 +6,9 @@ use std::fs::File;
 use std::io::Error as IoError;
 use std::io::prelude::*;
 
+use libdots::env::Env;
+use libdots::request::Request;
+
 #[path = "../util.rs"]
 mod util;
 use util::{NUM_SERVERS, THRESHOLD, NUM_A};
@@ -50,13 +53,12 @@ fn test_n_sub_a() {
     let a = vec![0, 4, 5];
     assert_eq!(n_sub_a(n, a), vec![1,2,3]);
 }
-fn main() -> Result<(), Box<dyn Error>> {
-    libdots::env::init()?;
 
-    let rank = libdots::env::get_world_rank();
-    let num_parties = libdots::env::get_world_size();
-    let func_name = libdots::env::get_func_name();
-    let args = libdots::env::get_args();
+fn handle_request(env: &Env, req: &Request) -> Result<(), Box<dyn Error>> {
+    let rank = env.get_world_rank();
+    let num_parties = env.get_world_size();
+    let func_name = &req.func_name;
+    let args = &req.args;
 
     println!("rank {} starting", rank);
 
@@ -147,7 +149,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             };
 
             let result_vec_to_output = serde_json::to_vec(&(result_vec, salt, skhash)).unwrap();
-            libdots::output::output(&result_vec_to_output)?;
+            req.output(&result_vec_to_output)?;
 
             Ok(())
         }
@@ -166,12 +168,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                     out_file.write_all(&my_prg_seed.to_le_bytes())?;
                     for j in 0..a_size {
                         if v[j] != rank as usize {
-                            libdots::msg::send(&my_prg_seed.to_le_bytes(), v[j], 0)?;
+                            req.msg_send(&my_prg_seed.to_le_bytes(), v[j], 0)?;
                         }
                     }
                 } else {
                     let mut buf = [0u8; 8];
-                    libdots::msg::recv(&mut buf, v[sender], 0)?;
+                    req.msg_recv(&mut buf, v[sender], 0)?;
                     out_file.write_all(&buf)?;
                 }
             }
@@ -179,5 +181,14 @@ fn main() -> Result<(), Box<dyn Error>> {
             Ok(())
         }
         _ => panic!(),
+    }
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let env = libdots::env::init()?;
+
+    loop {
+        let req = libdots::request::accept()?;
+        handle_request(&env, &req)?;
     }
 }
