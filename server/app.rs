@@ -2,9 +2,8 @@ use itertools::Itertools;
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 use std::error::Error;
-use std::fs::File;
+use std::fs;
 use std::io::Error as IoError;
-use std::io::prelude::*;
 
 #[path = "../util.rs"]
 mod util;
@@ -69,10 +68,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             let salt = &args[3];
             let skhash = &args[4];
 
-            File::create(format!("{}sk.txt", &user_id))?.write_all(sk_shares)?;
-            File::create(format!("{}pwd.txt", &user_id))?.write_all(pwd_share)?;
-            File::create(format!("{}skhash.txt", &user_id))?.write_all(skhash)?;
-            File::create(format!("{}salt.txt", &user_id))?.write_all(salt)?;
+            fs::write(format!("{}sk.txt", &user_id), sk_shares)?;
+            fs::write(format!("{}pwd.txt", &user_id), pwd_share)?;
+            fs::write(format!("{}skhash.txt", &user_id), skhash)?;
+            fs::write(format!("{}salt.txt", &user_id), salt)?;
 
             Ok(())
         },
@@ -82,13 +81,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             // compute R(PW-PWG) share locally
             
-            let mut buf = Vec::new();
-            File::open(format!("{}sk.txt", user_id))?.read_to_end(&mut buf)?;
-            let sk_shares: Vec<Share<33>> = serde_json::from_slice(&buf)?;
+            let sk_shares_data = fs::read(format!("{}sk.txt", user_id))?;
+            let sk_shares: Vec<Share<33>> = serde_json::from_slice(&sk_shares_data)?;
 
-            let mut buf = Vec::new();
-            File::open(format!("{}pwd.txt", user_id))?.read_to_end(&mut buf)?;
-            let pwd_share: Scalar = Share::<33>::try_from(buf.as_slice())?.as_field_element().unwrap();
+            let pwd_share_data = fs::read(format!("{}pwd.txt", user_id))?;
+            let pwd_share: Scalar = Share::<33>::try_from(pwd_share_data.as_slice())?.as_field_element().unwrap();
             let pwd_guess_share: Scalar = Share::<33>::try_from(args[1].as_ref())?.as_field_element().unwrap();
 
             // Thanks Emma for showing us this neat trick!
@@ -97,9 +94,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let a_size = NUM_SERVERS - THRESHOLD;
             let my_as = generate_a(num_parties, a_size, rank);
             let r_a = (0..NUM_A).map(|i| {
-                let mut buf = Vec::new();
-                let mut prg_file = File::open(format!("{}_prg.hex", i))?;
-                prg_file.read_to_end(&mut buf)?;
+                let _prg_data = fs::read(format!("{}_prg.hex", i))?;
                 let curr_seed = u64::from_le_bytes([0u8; 8]); // CHANGE
                 let rng = ChaCha20Rng::seed_from_u64(curr_seed);
                 // let next_seed = rng.gen::<u64>();
@@ -135,16 +130,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 result_vec.push(result);
             }
 
-            let salt = {
-                let mut buf = vec![];
-                File::open(format!("{}salt.txt", user_id))?.read_to_end(&mut buf)?;
-                buf
-            };
-            let skhash = {
-                let mut buf = vec![];
-                File::open(format!("{}skhash.txt", user_id))?.read_to_end(&mut buf)?;
-                buf
-            };
+            let salt = fs::read(format!("{}salt.txt", user_id))?;
+            let skhash = fs::read(format!("{}skhash.txt", user_id))?;
 
             let result_vec_to_output = serde_json::to_vec(&(result_vec, salt, skhash)).unwrap();
             libdots::output::output(&result_vec_to_output)?;
@@ -157,23 +144,24 @@ fn main() -> Result<(), Box<dyn Error>> {
             for (i, v) in generate_a(num_parties, a_size, rank as usize).iter().enumerate() {
                 let sender = 0; // I think this also works bc the set elements are all in increasing order 
                 println!("{} {:?}, {}", rank, v, sender);
-                let mut out_file = File::create(format!("{}_prg.hex", i))?;
                 let my_prg_seed = (v[0] * 256 + v[1] * 16 + v[2]) as u64; // change later?
 
                 println!("{}", my_prg_seed.to_le_bytes().len());
 
+                let prg_seed: u64;
                 if v[sender] == rank as usize {
-                    out_file.write_all(&my_prg_seed.to_le_bytes())?;
                     for j in 0..a_size {
                         if v[j] != rank as usize {
                             libdots::msg::send(&my_prg_seed.to_le_bytes(), v[j], 0)?;
                         }
                     }
+                    prg_seed = my_prg_seed;
                 } else {
                     let mut buf = [0u8; 8];
                     libdots::msg::recv(&mut buf, v[sender], 0)?;
-                    out_file.write_all(&buf)?;
+                    prg_seed = u64::from_le_bytes(buf);
                 }
+                fs::write(format!("{}_prg.hex", i), prg_seed.to_le_bytes())?;
             }
 
             Ok(())
