@@ -3,13 +3,15 @@ use std::error::Error;
 use std::iter;
 
 use blake2::{Blake2b512, Digest};
+use dotspb::dec_exec::dec_exec_client::DecExecClient;
+use futures::future;
 use p256::Scalar;
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
+use tonic::transport::Channel;
+use tonic::Request;
+use uuid::Uuid;
 use vsss_rs::{Shamir, Share};
-
-mod client;
-use client::Client;
 
 #[path = "../util.rs"]
 mod util;
@@ -17,13 +19,45 @@ use util::*;
 
 const APP_NAME: &str = "skrecovery";
 
-async fn upload_sk_and_pwd(client: &mut Client, id: &str, sk: &str, pwd: &str) -> Result<(), Box<dyn Error>> {
+fn uuid_to_uuidpb(id: Uuid) -> dotspb::dec_exec::Uuid {
+    dotspb::dec_exec::Uuid {
+        hi: (id.as_u128() >> 64) as u64,
+        lo: id.as_u128() as u64,
+    }
+}
+
+async fn seed_prgs(clients: &mut [DecExecClient<Channel>]) -> Result<(), Box<dyn Error>> {
+    let request_id = Uuid::new_v4();
+    future::join_all(
+            clients.iter_mut()
+                .map(|client|
+                    client.exec(Request::new(dotspb::dec_exec::App {
+                        app_name: APP_NAME.to_owned(),
+                        app_uid: 0,
+                        request_id: Some(uuid_to_uuidpb(request_id)),
+                        client_id: "".to_owned(),
+                        func_name: "seed_prgs".to_owned(),
+                        in_files: vec![],
+                        out_files: vec![],
+                        args: vec![],
+                    }))
+                )
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(())
+}
+
+async fn upload_sk_and_pwd(clients: &mut [DecExecClient<Channel>], id: &str, sk: &str, pwd: &str) -> Result<(), Box<dyn Error>> {
     let rng = &mut ChaCha20Rng::from_entropy();
     let field_elts = sk_to_field_elts(&sk);
     let mut shares_vec = Vec::new();
     for _ in 0..NUM_SERVERS {
         shares_vec.push(Vec::new());
     }
+
     for nzs in field_elts.as_slice() {
         // 32 for field size, 1 for identifier = 33
         let res = Shamir::<THRESHOLD, NUM_SERVERS>::split_secret::<Scalar, ChaCha20Rng, 33>(
@@ -60,14 +94,25 @@ async fn upload_sk_and_pwd(client: &mut Client, id: &str, sk: &str, pwd: &str) -
     }
     let hash = hasher.finalize().to_vec();
 
-    client.exec(APP_NAME,
-                "upload_sk_and_pwd",
-                vec![],
-                vec![],
-                iter::zip(sk_shares, pwd_shares)
-                    .map(|(sk_share, pwd_share)| vec![id.as_bytes().to_owned(), sk_share, pwd_share, salt.to_vec(), hash.clone()])
-                    .collect())
-        .await?;
+    let request_id = Uuid::new_v4();
+    future::join_all(
+            iter::zip(clients, iter::zip(sk_shares, pwd_shares))
+                .map(|(client, (sk_share, pwd_share))|
+                    client.exec(Request::new(dotspb::dec_exec::App {
+                        app_name: APP_NAME.to_owned(),
+                        app_uid: 0,
+                        request_id: Some(uuid_to_uuidpb(request_id)),
+                        client_id: "".to_owned(),
+                        func_name: "upload_sk_and_pwd".to_owned(),
+                        in_files: vec![],
+                        out_files: vec![],
+                        args: vec![id.as_bytes().to_owned(), sk_share, pwd_share, salt.to_vec(), hash.clone()],
+                    }))
+                )
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
 
     Ok(())
 }
@@ -118,6 +163,41 @@ fn aggregate_sk(outputs: &[&[u8]]) -> Vec<u8> {
     
 }
 
+async fn recover_sk(clients: &mut [DecExecClient<Channel>], id: &str, pwd_guess: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+    let pwd_guess_shares = compute_pwd_guess(pwd_guess);
+
+    let request_id = Uuid::new_v4();
+    let res = future::join_all(
+            iter::zip(clients, pwd_guess_shares)
+                .map(|(client, pwd_guess_share)|
+                    client.exec(Request::new(dotspb::dec_exec::App {
+                        app_name: APP_NAME.to_owned(),
+                        app_uid: 0,
+                        request_id: Some(uuid_to_uuidpb(request_id)),
+                        client_id: "".to_owned(),
+                        func_name: "skrecovery".to_owned(),
+                        in_files: vec![],
+                        out_files: vec![],
+                        args: vec![id.as_bytes().to_owned(), pwd_guess_share],
+                    }))
+                )
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .map(|res| res.into_inner())
+        .collect::<Vec<_>>();
+    let outputs: Vec<&[u8]> = res
+        .iter()
+        .map(|res| res.output.as_slice())
+        .collect();
+
+    let s = aggregate_sk(&outputs);
+
+    Ok(s)
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
@@ -130,23 +210,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "http://127.0.0.1:50054",
     ];
 
-    let cli_id = "";
-    let mut client = Client::new(cli_id);
-
-    client.setup(node_addrs.to_vec(), None);
+    let mut clients = future::join_all(
+            node_addrs
+                .iter()
+                .map(|addr| DecExecClient::connect(addr.clone()))
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
 
     match &cmd[..] {
         "seed_prgs" => {
-            client
-                .exec(APP_NAME, "seed_prgs", vec![], vec![], vec![vec![]; NUM_A])
-                .await?;
+            seed_prgs(&mut clients).await?;
         }
         "upload_sk_and_pwd" => {
             let id = &args[2];
             let sk = &args[3];
             let pwd = &args[4];
             println!("Uploading sk {}, pwd {} for user {}", sk, pwd, id);
-            upload_sk_and_pwd(&mut client, id, sk, pwd).await?;
+            upload_sk_and_pwd(&mut clients, id, sk, pwd).await?;
         }
         "recover_sk" => {
             let id = &args[2];
@@ -157,27 +239,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 pwd_guess, id
             );
 
-            let pwd_guess_shares = compute_pwd_guess(pwd_guess);
+            let s = recover_sk(&mut clients, id, pwd_guess).await?;
 
-            let responses = client
-                .exec(
-                    APP_NAME,
-                    "skrecovery",
-                    vec![],
-                    vec![],
-                    pwd_guess_shares
-                        .into_iter()
-                        .map(|pwd_guess_share| vec![id.as_bytes().to_owned(), pwd_guess_share])
-                        .collect()
-                )
-                .await?;
-            let outputs: Vec<&[u8]> = responses
-                .iter()
-                .map(|res| res.output.as_slice())
-                .collect();
-
-            println!("Aggregating SK on client");
-            let s = aggregate_sk(&outputs);
             if s.is_empty() {
                 println!("Recovered sk incorrect!");
             } else {
