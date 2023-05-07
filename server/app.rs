@@ -4,6 +4,8 @@ use rand_chacha::ChaCha20Rng;
 use std::error::Error;
 use std::fs;
 use std::io::Error as IoError;
+use std::sync::Arc;
+use std::thread;
 
 use libdots::env::Env;
 use libdots::request::Request;
@@ -173,10 +175,13 @@ fn handle_request(env: &Env, req: &Request) -> Result<(), Box<dyn Error>> {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let env = libdots::env::init()?;
+    let env = Arc::new(libdots::env::init()?);
 
     loop {
+        let env = env.clone();
         let req = libdots::request::accept()?;
-        handle_request(&env, &req)?;
+        thread::spawn(move || {
+            handle_request(&env, &req).unwrap();
+        });
     }
 }
