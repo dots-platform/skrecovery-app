@@ -4,6 +4,10 @@ use rand_chacha::ChaCha20Rng;
 use std::error::Error;
 use std::fs;
 use std::io::Error as IoError;
+use std::thread;
+
+use libdots::env::Env;
+use libdots::request::Request;
 
 #[path = "../util.rs"]
 mod util;
@@ -49,13 +53,12 @@ fn test_n_sub_a() {
     let a = vec![0, 4, 5];
     assert_eq!(n_sub_a(n, a), vec![1,2,3]);
 }
-fn main() -> Result<(), Box<dyn Error>> {
-    libdots::env::init()?;
 
-    let rank = libdots::env::get_world_rank();
-    let num_parties = libdots::env::get_world_size();
-    let func_name = libdots::env::get_func_name();
-    let args = libdots::env::get_args();
+fn handle_request(env: &Env, req: &Request) -> Result<(), Box<dyn Error>> {
+    let rank = env.get_world_rank();
+    let num_parties = env.get_world_size();
+    let func_name = &req.func_name;
+    let args = &req.args;
 
     println!("rank {} starting", rank);
 
@@ -134,7 +137,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let skhash = fs::read(format!("{}skhash.txt", user_id))?;
 
             let result_vec_to_output = serde_json::to_vec(&(result_vec, salt, skhash)).unwrap();
-            libdots::output::output(&result_vec_to_output)?;
+            req.output(&result_vec_to_output)?;
 
             Ok(())
         }
@@ -152,13 +155,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                 if v[sender] == rank as usize {
                     for j in 0..a_size {
                         if v[j] != rank as usize {
-                            libdots::msg::send(&my_prg_seed.to_le_bytes(), v[j], 0)?;
+                            req.msg_send(&my_prg_seed.to_le_bytes(), v[j], 0)?;
                         }
                     }
                     prg_seed = my_prg_seed;
                 } else {
                     let mut buf = [0u8; 8];
-                    libdots::msg::recv(&mut buf, v[sender], 0)?;
+                    req.msg_recv(&mut buf, v[sender], 0)?;
                     prg_seed = u64::from_le_bytes(buf);
                 }
                 fs::write(format!("{}_prg.hex", i), prg_seed.to_le_bytes())?;
@@ -168,4 +171,20 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         _ => panic!(),
     }
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let env = libdots::env::init()?;
+
+    thread::scope(|s| -> Result<(), Box<dyn Error>> {
+        loop {
+            let env = &env;
+            let req = libdots::request::accept()?;
+            s.spawn(move || {
+                handle_request(env, &req).unwrap();
+            });
+        }
+    })?;
+
+    Ok(())
 }
