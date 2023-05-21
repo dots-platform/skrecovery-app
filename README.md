@@ -47,26 +47,30 @@ cargo build
 
 ### 1. Setup Nodes
 #### 1.1 Server Configuration
-First configure the server nodes in `server_conf.yml`. Any number of servers can be added. The default configuration runs with three servers; the first `N-1` servers are always MPC servers, and the last server is always the beaver triple server.
+First configure the server nodes in `server_conf.yml`. Any number of servers can be added. The default configuration runs with five servers; the first `N-1` servers are always MPC servers, and the last server is always the beaver triple server.
+
+Ensure that the application configuration stanza is present in the server config. By default, the client uses the application name `skrecovery`. If this repository is cloned as a sibling of the <https://github.com/dtrust-project/dots-server> repo, the following stanza should work:
+
+```yaml
+apps:
+  skrecovery:
+    path: ../skrecovery-app/target/debug/rust_app
+```
 
 #### 1.2 Client Configuration
-In `client/main.rs:93` add the addresses of all the servers in `server_conf.yml` to the `node_addrs` list.
+In `client/main.rs:93` add the addresses of all the servers in `server_conf.yml` to the `node_addrs` list. If you changed the name of the application from `skrecovery` in the server config, update the `APP_NAME` constant, as well.
 
 #### 1.3 Start Nodes
 
-Run the following command in one terminal.
+Run the following command in one terminal in the DoTS server repo.
 ```bash
-./start_servers.sh
+./start-n.sh 0 <N-1>
 ```
 
+Where `<N-1>` is the number of servers minus one, or the index of the last server node.
 
-### 2. Start the client server
-Start the client in another terminal.
-```bash
-cargo run --bin rust_app
-```
 
-### 3. Commands
+### 2. Commands
 In another terminal, execute the following commands to register/recover secret keys.
 #### Initialize seeds to use for key recovery step
 ```bash
