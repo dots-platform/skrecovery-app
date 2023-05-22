@@ -114,18 +114,15 @@ fn handle_request(env: &Env, req: &Request) -> Result<(), Box<dyn Error>> {
                 for f in factors {
                     fa_j *= Scalar::from_uint_reduced(U256::from(rank as u32)) - Scalar::from_uint_reduced(U256::from(f as u8));
                 }
-                fa_j + Scalar::one()
+                fa_j
             });
-            let my_share = f_a.zip(r_a).fold(Scalar::zero(), |prev, f_and_r| prev + f_and_r.0 * f_and_r.1); 
+            let random_hiding = f_a.zip(r_a).fold(Scalar::zero(), |prev, f_and_r| prev + f_and_r.0 * f_and_r.1); 
 
-            // TODO check that all ids are the same maybe this isn't necessary
-
-            //let random_scalar = Scalar::random(rng);
             let mut result_vec = Vec::new();
             for sk_share in sk_shares {
                 let id = sk_share.identifier();
                 let share: Scalar = sk_share.as_field_element().unwrap();
-                let field_to_write = (pwd_share - pwd_guess_share) * my_share + share;
+                let field_to_write = (pwd_share - pwd_guess_share) * random_hiding + share;
                 let mut result = vec![id];
                 result.extend(field_to_write.to_bytes());
                 result_vec.push(result);
@@ -145,7 +142,8 @@ fn handle_request(env: &Env, req: &Request) -> Result<(), Box<dyn Error>> {
             for (i, v) in generate_a(num_parties, a_size, rank as usize).iter().enumerate() {
                 let sender = 0; // I think this also works bc the set elements are all in increasing order 
                 println!("{} {:?}, {}", rank, v, sender);
-                let my_prg_seed = (v[0] * 256 + v[1] * 16 + v[2]) as u64; // change later?
+                let rng = &mut ChaCha20Rng::from_entropy();
+                let my_prg_seed = rng.gen::<u64>(); // change later?
 
                 println!("{}", my_prg_seed.to_le_bytes().len());
 
