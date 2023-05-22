@@ -14,7 +14,7 @@ itertools = "0.10.5"
 libdots = "0.3.1"
 p256 = { version = "0.11.1", features = ["arithmetic", "bits"] }
 rand = "0.8.5"
-rand_chacha = "0.3.1"
+rand_chacha = { version = "0.3", features = ["serde1"] }
 serde = "1.0.159"
 serde_json = "1.0.95"
 tokio = { version = "1.13", features = ["full"] }

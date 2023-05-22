@@ -97,17 +97,15 @@ fn handle_request(env: &Env, req: &Request) -> Result<(), Box<dyn Error>> {
             let a_size = NUM_SERVERS - THRESHOLD;
             let my_as = generate_a(num_parties, a_size, rank);
             let r_a = (0..NUM_A).map(|i| {
-                let _prg_data = fs::read(format!("{}_prg.hex", i))?;
-                let curr_seed = u64::from_le_bytes([0u8; 8]); // CHANGE
-                let rng = ChaCha20Rng::seed_from_u64(curr_seed);
-                // let next_seed = rng.gen::<u64>();
-                // let mut prg_out_file = &out_files[i];
-                // println!("new seed len {}", next_seed.to_le_bytes().len());
-                // if prg_out_file.write_all(&next_seed.to_le_bytes()).is_err() {
-                //     panic!("Error writing new prg seed {}", i)
-                // }
-                // assert!(prg_out_file.flush().is_ok());
-                Ok(Scalar::random(rng))
+                let prg_data = fs::read(format!("{}_prg.json", i))?;
+                let prg_string = String::from_utf8(prg_data).unwrap();
+                println!("{}", prg_string);
+                let mut rng: ChaCha20Rng = serde_json::from_str(&prg_string)?;
+                let r_a = Scalar::random(rng.clone());
+                let _change_rng = rng.gen::<u64>(); // change prg state before storing again
+                let serialized_rng = serde_json::to_string(&rng)?;
+                fs::write(format!("{}_prg.json", i), serialized_rng.as_bytes())?;
+                Ok(r_a)
             }).collect::<Result<Vec<Scalar>, IoError>>()?;
 
             let f_a = my_as.iter().map(|a| {
@@ -116,18 +114,15 @@ fn handle_request(env: &Env, req: &Request) -> Result<(), Box<dyn Error>> {
                 for f in factors {
                     fa_j *= Scalar::from_uint_reduced(U256::from(rank as u32)) - Scalar::from_uint_reduced(U256::from(f as u8));
                 }
-                fa_j + Scalar::one()
+                fa_j
             });
-            let my_share = f_a.zip(r_a).fold(Scalar::zero(), |prev, f_and_r| prev + f_and_r.0 * f_and_r.1); 
+            let random_hiding = f_a.zip(r_a).fold(Scalar::zero(), |prev, f_and_r| prev + f_and_r.0 * f_and_r.1); 
 
-            // TODO check that all ids are the same maybe this isn't necessary
-
-            //let random_scalar = Scalar::random(rng);
             let mut result_vec = Vec::new();
             for sk_share in sk_shares {
                 let id = sk_share.identifier();
                 let share: Scalar = sk_share.as_field_element().unwrap();
-                let field_to_write = (pwd_share - pwd_guess_share) * my_share + share;
+                let field_to_write = (pwd_share - pwd_guess_share) * random_hiding + share;
                 let mut result = vec![id];
                 result.extend(field_to_write.to_bytes());
                 result_vec.push(result);
@@ -147,7 +142,8 @@ fn handle_request(env: &Env, req: &Request) -> Result<(), Box<dyn Error>> {
             for (i, v) in generate_a(num_parties, a_size, rank as usize).iter().enumerate() {
                 let sender = 0; // I think this also works bc the set elements are all in increasing order 
                 println!("{} {:?}, {}", rank, v, sender);
-                let my_prg_seed = (v[0] * 256 + v[1] * 16 + v[2]) as u64; // change later?
+                let rng = &mut ChaCha20Rng::from_entropy();
+                let my_prg_seed = rng.gen::<u64>(); // change later?
 
                 println!("{}", my_prg_seed.to_le_bytes().len());
 
@@ -164,7 +160,10 @@ fn handle_request(env: &Env, req: &Request) -> Result<(), Box<dyn Error>> {
                     req.msg_recv(&mut buf, v[sender], 0)?;
                     prg_seed = u64::from_le_bytes(buf);
                 }
-                fs::write(format!("{}_prg.hex", i), prg_seed.to_le_bytes())?;
+                // Store rng state instead of seed in file, which updates after each recovery attempt
+                let mut rng = ChaCha20Rng::seed_from_u64(prg_seed);
+                let serialized_rng = serde_json::to_string(&rng)?;
+                fs::write(format!("{}_prg.json", i), serialized_rng.as_bytes())?;
             }
 
             Ok(())

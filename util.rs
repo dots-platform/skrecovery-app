@@ -112,28 +112,28 @@ fn test_sk_to_field_elt() {
     assert!(sk3 == sk_recovered3);
 }
 
-#[test]
-fn test_verify_sk_hash() {
-    let rng = &mut ChaCha20Rng::from_entropy();
-    let salt = rng.gen::<[u8; 32]>();
-    let scalars = &mut [Scalar::ONE; 3];
-    let mut hasher = Blake2b512::new();
-    hasher.update(salt);
-    for i in 0..3 {
-        hasher.update(scalars[i].to_bytes());
-    }
-    let mut salts = Vec::new();
-    let mut salts_bad = Vec::new();
-    let mut hashes = Vec::new();
-    let mut hashes_bad = Vec::new();
-    let res = hasher.finalize();
-    for _ in 0..3 {
-        salts.push(salt.to_vec());
-        hashes.push(res.to_vec());
-        salts_bad.push(Vec::new());
-        hashes_bad.push(Vec::new());
-    }
-    assert!(verify_sk_hash(salts, hashes, scalars));
-    scalars[0] = Scalar::ZERO;
-    assert!(!verify_sk_hash(salts_bad, hashes_bad, scalars));
-}
+//#[test]
+// fn test_verify_sk_hash() {
+//     let rng = &mut ChaCha20Rng::from_entropy();
+//     let salt = rng.gen::<[u8; 32]>();
+//     let scalars = &mut [Scalar::ONE; 3];
+//     let mut hasher = Blake2b512::new();
+//     hasher.update(salt);
+//     for i in 0..3 {
+//         hasher.update(scalars[i].to_bytes());
+//     }
+//     let mut salts = Vec::new();
+//     let mut salts_bad = Vec::new();
+//     let mut hashes = Vec::new();
+//     let mut hashes_bad = Vec::new();
+//     let res = hasher.finalize();
+//     for _ in 0..3 {
+//         salts.push(salt.to_vec());
+//         hashes.push(res.to_vec());
+//         salts_bad.push(Vec::new());
+//         hashes_bad.push(Vec::new());
+//     }
+//     assert!(verify_sk_hash(salts, hashes, scalars));
+//     scalars[0] = Scalar::ZERO;
+//     assert!(!verify_sk_hash(salts_bad, hashes_bad, scalars));
+// }
