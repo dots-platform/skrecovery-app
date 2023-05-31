@@ -47,15 +47,21 @@ cargo build
 
 ### 1. Setup Nodes
 #### 1.1 Server Configuration
-First configure the server nodes in `server_conf.yml`. Any number of servers can be added. The default configuration runs with five servers; the first `N-1` servers are always MPC servers, and the last server is always the beaver triple server.
+Before you begin, make sure you set up the workspace following the instructions in [dots-server](https://github.com/dots-platform/dots-server). We assume you have a workspace folder named `dots` and you are in this workspace. First, install the repo in this workspace:
 
-Ensure that the application configuration stanza is present in the server config. By default, the client uses the application name `skrecovery`. If this repository is cloned as a sibling of the <https://github.com/dtrust-project/dots-server> repo, the following stanza should work:
+```
+git clone https://github.com/dots-platform/skrecovery-app.git
+```
 
+Configure the server nodes in `dots-server/server_conf.yml`. Any number of servers can be added. The default configuration runs with five servers, so you should change the server config to set up three servers.
+
+Next, add the `skrecovery` application to the config. By default, the following stanza should work:
 ```yaml
 apps:
   skrecovery:
     path: ../skrecovery-app/target/debug/rust_app
 ```
+
 
 #### 1.2 Client Configuration
 In `client/main.rs:93` add the addresses of all the servers in `server_conf.yml` to the `node_addrs` list. If you changed the name of the application from `skrecovery` in the server config, update the `APP_NAME` constant, as well.
@@ -64,11 +70,8 @@ In `client/main.rs:93` add the addresses of all the servers in `server_conf.yml`
 
 Run the following command in one terminal in the DoTS server repo.
 ```bash
-./start-n.sh 0 <N-1>
+./start-n.sh 0 4
 ```
-
-Where `<N-1>` is the number of servers minus one, or the index of the last server node.
-
 
 ### 2. Commands
 In another terminal, execute the following commands to register/recover secret keys.
