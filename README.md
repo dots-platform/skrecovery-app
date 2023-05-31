@@ -1,4 +1,4 @@
-# Secret Key Recovery
+# Dots Application: Secret Key Recovery
 **Group Members**: Allison Li, Michael Ren, Yuwen Zhang \
 **Google slide presentation**: [Link to slides](https://docs.google.com/presentation/d/1u1Br2Mme98Wht2vrZYd0OYpvr5GDZNZZfiXFLk-RHWU/edit?usp=sharing)
 
